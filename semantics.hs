@@ -203,7 +203,7 @@ evalc [] p t = t
 evalc (g0:gs) p t = eval g0 p $ \es -> evalc gs p t
 
 envLookup :: U -> Ide -> L
-envLookup [] _ = 0
+envLookup [] _ = -1
 envLookup ((a, b):as) p
   | p == a = b
   | otherwise = envLookup as p
@@ -219,7 +219,7 @@ wrong :: String -> C
 wrong a p = "Error: " ++ a ++ "\nStore: " ++ show p
 
 hold :: L -> K -> C
-hold a k s = send (fst (s !! (a - 1))) k s
+hold a k s = send (fst (s !! a)) k s
 
 single :: (E -> C) -> K
 single p es
@@ -235,7 +235,8 @@ single p es
 --           Nothing -> Left "out of memory"
 new :: S -> L
 new [] = error "empty store"
-new l =
+-- Because lists are 1-indexed, we ignore the first element.
+new (_:l) = 1 +
   fromMaybe
     (error "out of memory")
     (findIndex
@@ -256,8 +257,8 @@ genStore :: Int -> S
 genStore n = replicate n (Em Undefined, False)
 
 replace :: Int -> a -> [a] -> [a]
-replace 0 a (_:as) = a : as
-replace n a (_:as) = replace (n - 1) a as
+replace 0 x (_:as) = x : as
+replace n x (a:as) = a : replace (n - 1) x as
 
 update :: L -> E -> S -> S
 update l e = replace l (e, True)
@@ -276,7 +277,7 @@ unpermute :: [E] -> [E]
 unpermute = id
 
 applicate :: E -> [E] -> K -> C
-applicate (Ef e) es k = snd e es k
+applicate (Ef e) es k = (snd e) es k
 applicate _ _ _ = wrong "bad procedure"
 
 onearg :: (E -> K -> C) -> ([E] -> K -> C)
@@ -309,6 +310,28 @@ add =
              _ -> wrong "non-numeric argument to +"
          _ -> wrong "non-numeric argument to +")
 
+mult :: [E] -> K -> C
+mult =
+  twoarg
+    (\e1 e2 k ->
+       case e1 of
+         (Ek (Number r1)) ->
+           case e2 of
+             (Ek (Number r2)) -> send (Ek (Number (r1 * r2))) k
+             _ -> wrong "non-numeric argument to *"
+         _ -> wrong "non-numeric argument to *")
+
+sub :: [E] -> K -> C
+sub =
+  twoarg
+    (\e1 e2 k ->
+       case e1 of
+         (Ek (Number r1)) ->
+           case e2 of
+             (Ek (Number r2)) -> send (Ek (Number (r1 - r2))) k
+             _ -> wrong "non-numeric argument to -"
+         _ -> wrong "non-numeric argument to -")
+
 car :: [E] -> K -> C
 car =
   onearg
@@ -327,7 +350,7 @@ apply =
   twoarg
     (\e1 e2 k ->
        case e1 of
-         e@(Ef e1) -> valueslist [e2] (\es -> applicate e es k)
+         Ef f -> valueslist [e2] (\es -> applicate e1 es k)
          _ -> wrong "bad procedure argument to apply")
 
 valueslist :: [E] -> K -> C
@@ -335,11 +358,12 @@ valueslist =
   onearg
     (\e k ->
        case e of
-         e@(Ep _) ->
+         Ep _ ->
            cdr
              [e]
              (\es ->
                 valueslist es (\es -> car [e] (single (\e -> k (e : es)))))
+         (Ek Nil) -> k []
          _ -> wrong "non-list argument to values-list")
 
 tievals :: ([L] -> C) -> [E] -> C
@@ -381,6 +405,22 @@ sFstTest = App (App scFst [Const (Number 3)]) [Const (Number 5)]
 
 sSndTest = App (App scSnd [Const (Number 3)]) [Const (Number 5)]
 
+
+addTest = (App (Id "add") [Const (Number 3), Const (Number 5)])
 evalWithStore prog n = eval prog emptyEnv idKCont (genStore n)
 
+evalStd prog = putStrLn $ eval prog stdEnv idKCont stdStore
 evalr prog = evalWithStore prog 10
+
+stdEnv = [("add", 3)]
+
+stdStore = [(Em Undefined, False),
+            (Em Undefined, False),
+            (Em Undefined, False),
+            (Ef (1, add), True)] ++ (genStore 10)
+
+--            (Id "x", (Ek (Number 3)))
+--           ] ++ (genStore 10)
+
+addTest2 = App (Lambda ["x"] [] (App (Id "add") [Id "x", Id "x"]))
+               [Const (Number 10)]
