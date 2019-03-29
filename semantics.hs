@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 
-import Data.List
-import Data.Maybe
+import           Data.List
+import           Data.Maybe
 
 -- Locations
 type L = Int
@@ -32,12 +32,12 @@ data Con
   deriving (Eq)
 
 instance Show Con where
-  show (Symbol q) = q
-  show (Character h) = "#\\" ++ [h]
-  show (Number r) = show r
-  show (Boolean True) = "#t"
+  show (Symbol q)      = q
+  show (Character h)   = "#\\" ++ [h]
+  show (Number r)      = show r
+  show (Boolean True)  = "#t"
   show (Boolean False) = "#t"
-  show Nil = "()"
+  show Nil             = "()"
 
 -- Expressed values
 data E
@@ -49,12 +49,12 @@ data E
   | Ef F
 
 instance Show E where
-  show (Ek con) = show con
+  show (Ek con)           = show con
   show (Ep (car, cdr, _)) = concat ["(", show car, " . ", show cdr, ")"]
-  show (Ev (l, _)) = show l
-  show (Es (l, _)) = show l
-  show (Em m) = show m
-  show (Ef f) = "#<procedure>"
+  show (Ev (l, _))        = show l
+  show (Es (l, _))        = show l
+  show (Em m)             = show m
+  show (Ef f)             = "#<procedure>"
 
 -- Miscellaneous
 data M
@@ -65,11 +65,11 @@ data M
   deriving (Eq)
 
 instance Show M where
-  show (Boom True) = "#t"
+  show (Boom True)  = "#t"
   show (Boom False) = "#f"
-  show Null = "null"
-  show Unspecified = "#<unspecified>"
-  show Undefined = "#<undefined>"
+  show Null         = "null"
+  show Unspecified  = "#<unspecified>"
+  show Undefined    = "#<undefined>"
 
 -- Procedures
 type F = (L, [E] -> K -> C)
@@ -87,7 +87,7 @@ type C = S -> A
 type K = [E] -> C
 
 -- Answer
-type A = String
+type A = (String, [E], S)
 
 -- Errors
 newtype X a =
@@ -201,7 +201,7 @@ evals [] _ k = k []
 evals (e0:es) p k = eval e0 p $ single $ \e0 -> evals es p $ \es -> k (e0 : es)
 
 evalc :: [Expr] -> U -> C -> C
-evalc [] p t = t
+evalc [] p t      = t
 evalc (g0:gs) p t = eval g0 p $ \es -> evalc gs p t
 
 envLookup :: U -> Ide -> L
@@ -211,14 +211,14 @@ envLookup ((a, b):as) p
   | otherwise = envLookup as p
 
 extends :: U -> [Ide] -> [L] -> U
-extends p [] _ = p
+extends p [] _          = p
 extends p (i:is) (a:as) = extends ((i, a) : p) is as
 
 send :: E -> K -> C
 send e k = k [e]
 
 wrong :: String -> C
-wrong a p = "Error: " ++ a ++ "\nStore: " ++ show p
+wrong a p = ("Error: " ++ a, [], p)
 
 hold :: L -> K -> C
 hold a k s = send (fst (s !! a)) k s
@@ -271,7 +271,7 @@ assign a e t s = t $ update a e s
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
-truish (Ek (Boolean True)) = True
+truish (Ek (Boolean True))  = True
 
 permute :: [Expr] -> [Expr]
 permute = id
@@ -280,19 +280,19 @@ unpermute :: [E] -> [E]
 unpermute = id
 
 applicate :: E -> [E] -> K -> C
-applicate (Ef e) es k = (snd e) es k
-applicate _ _ _ = wrong "bad procedure"
+applicate (Ef e) es k = snd e es k
+applicate _ _ _       = wrong "bad procedure"
 
 onearg :: (E -> K -> C) -> ([E] -> K -> C)
 onearg x [e] k = x e k
-onearg _ _ _ = wrong "wrong number of arguments"
+onearg _ _ _   = wrong "wrong number of arguments"
 
 twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg x [e1, e2] k = x e1 e2 k
-twoarg _ _ _ = wrong "wrong number of arguments"
+twoarg _ _ _        = wrong "wrong number of arguments"
 
 list :: [E] -> K -> C
-list [] k = send (Ek Nil) k
+list [] k     = send (Ek Nil) k
 list (x:xs) k = list xs $ single $ \e -> cons [x, e] k
 
 cons :: [E] -> K -> C
@@ -302,6 +302,16 @@ cons =
        (\s' -> send (Ep (new s, new s', True)) k (update (new s') e2 s'))
          (update (new s) e1 s))
 
+factorial :: [E] -> K -> C
+factorial =
+  onearg
+    (\e1 k ->
+       case e1 of
+         (Ek (Number 0)) -> send (Ek (Number 1)) k
+         m@(Ek (Number n)) ->
+           factorial [Ek (Number (n - 1))] $ single $ \e -> mult [e, m] k
+         _ -> wrong "non-numeric argument to factorial")
+
 add :: [E] -> K -> C
 add =
   twoarg
@@ -310,7 +320,7 @@ add =
          (Ek (Number r1)) ->
            case e2 of
              (Ek (Number r2)) -> send (Ek (Number (r1 + r2))) k
-             _ -> wrong "non-numeric argument to +"
+             _                -> wrong "non-numeric argument to +"
          _ -> wrong "non-numeric argument to +")
 
 mult :: [E] -> K -> C
@@ -321,7 +331,7 @@ mult =
          (Ek (Number r1)) ->
            case e2 of
              (Ek (Number r2)) -> send (Ek (Number (r1 * r2))) k
-             _ -> wrong "non-numeric argument to *"
+             _                -> wrong "non-numeric argument to *"
          _ -> wrong "non-numeric argument to *")
 
 sub :: [E] -> K -> C
@@ -332,7 +342,7 @@ sub =
          (Ek (Number r1)) ->
            case e2 of
              (Ek (Number r2)) -> send (Ek (Number (r1 - r2))) k
-             _ -> wrong "non-numeric argument to -"
+             _                -> wrong "non-numeric argument to -"
          _ -> wrong "non-numeric argument to -")
 
 car :: [E] -> K -> C
@@ -355,20 +365,20 @@ setcar =
     (\e1 e2 k ->
        case e1 of
          Ep (a, _, True) -> assign a e2 (send (Em Unspecified) k)
-         Ep _ -> wrong "immutable argument to set-car!"
-         _ -> wrong "non-pair argument to set-car!")
+         Ep _            -> wrong "immutable argument to set-car!"
+         _               -> wrong "non-pair argument to set-car!")
 
 eqv :: [E] -> K -> C
 eqv =
   twoarg
     (\e1 e2 ->
        case (e1, e2) of
-         (Ek a, Ek b) -> retbool (a == b)
-         (Em a, Em b) -> retbool (a == b)
-         (Ev a, Ev b) -> retbool (a == b)
+         (Ek a, Ek b)                 -> retbool (a == b)
+         (Em a, Em b)                 -> retbool (a == b)
+         (Ev a, Ev b)                 -> retbool (a == b)
          (Ep (a, x, _), Ep (b, y, _)) -> retbool ((a == b) && (x == y))
-         (Ef (a, _), Ef (b, _)) -> retbool (a == b)
-         _ -> retbool False)
+         (Ef (a, _), Ef (b, _))       -> retbool (a == b)
+         _                            -> retbool False)
   where
     retbool :: Bool -> K -> C
     retbool b = send (Ek (Boolean b))
@@ -379,7 +389,7 @@ apply =
     (\e1 e2 k ->
        case e1 of
          Ef f -> valueslist [e2] (\es -> applicate e1 es k)
-         _ -> wrong "bad procedure argument to apply")
+         _    -> wrong "bad procedure argument to apply")
 
 valueslist :: [E] -> K -> C
 valueslist =
@@ -394,7 +404,7 @@ valueslist =
          _ -> wrong "non-list argument to values-list")
 
 tievals :: ([L] -> C) -> [E] -> C
-tievals f [] s = f [] s
+tievals f [] s     = f [] s
 tievals f (e:es) s = tievals (\as -> f (new s : as)) es (update (new s) e s)
 
 -- Call with current continuation
@@ -427,7 +437,7 @@ dropfirst = drop
 takefirst = take
 
 idKCont :: [E] -> S -> A
-idKCont e s = concat ["Result: ", show e, "\nStore: ", show s]
+idKCont e s = ("Done.", e, s)
 
 sId = Lambda ["x"] [] (Id "x")
 
@@ -450,20 +460,32 @@ sFstTest = App (App scFst [Const (Number 3)]) [Const (Number 5)]
 
 sSndTest = App (App scSnd [Const (Number 3)]) [Const (Number 5)]
 
-addTest = (App (Id "add") [Const (Number 3), Const (Number 5)])
+addTest = App (Id "+") [Const (Number 3), Const (Number 5)]
 
 evalWithStore prog n = eval prog emptyEnv idKCont (genStore n)
 
-evalStd prog = putStrLn $ eval prog stdEnv idKCont stdStore
+evalStd prog size = eval prog stdEnv idKCont (stdStore size)
 
+-- Evaluate with an empty store of a given size.
+evalr :: Expr -> A
 evalr prog = evalWithStore prog 10
 
 -- Standard environment
+stdEnv :: U
 stdEnv =
-  [("add", 1), ("mult", 2), ("sub", 3), ("cons", 4), ("car", 5), ("cdr", 6)]
+  [ ("+", 1)
+  , ("*", 2)
+  , ("-", 3)
+  , ("cons", 4)
+  , ("car", 5)
+  , ("cdr", 6)
+  , ("eqv?", 7)
+  , ("factorial", 8)
+  ]
 
--- Standard store
-stdStore =
+-- Standard base store.
+stdPrelude :: S
+stdPrelude =
   [ (Em Undefined, False)
   , (Ef (1, add), True)
   , (Ef (2, mult), True)
@@ -471,17 +493,80 @@ stdStore =
   , (Ef (4, cons), True)
   , (Ef (5, car), True)
   , (Ef (6, cdr), True)
-  ] ++
-  genStore 10
+  , (Ef (7, eqv), True)
+  , (Ef (8, factorial), True)
+  ]
+
+-- Create a standard store with a given size of free space.
+stdStore :: Int -> S
+stdStore n = stdPrelude ++ genStore n
 
 addTest2 =
-  App (Lambda ["x"] [] (App (Id "add") [Id "x", Id "x"])) [Const (Number 10)]
+  App (Lambda ["x"] [] (App (Id "+") [Id "x", Id "x"])) [Const (Number 10)]
 
 simpleList =
   App
     (Id "cons")
-    [Const (Number 10), (App (Id "cons") [Const (Number 20), Const Nil])]
+    [Const (Number 10), App (Id "cons") [Const (Number 20), Const Nil]]
 
 carTest = App (Id "car") [simpleList]
 
 cdrTest = App (Id "cdr") [simpleList]
+
+factTest =
+  App (Lambda ["x"] [] (App (Id "factorial") [Id "x"])) [Const (Number 6)]
+
+ifTest :: Expr
+ifTest =
+  App
+    (Lambda
+       ["x"]
+       []
+       (If
+          (App (Id "eqv?") [Id "x", Const (Number 0)])
+          (Const (Number 10))
+          (Const (Number 20))))
+    [Const (Number 0)]
+
+yComb =
+  Lambda
+    ["fn"]
+    []
+    (App
+       (Lambda ["h"] [] (App (Id "h") [Id "h"]))
+       [ Lambda
+           ["g"]
+           []
+           (App
+              (Id "fn")
+              [Lambda ["x"] [] (App (App (Id "g") [Id "g"]) [Id "x"])])
+       ])
+
+
+{--
+Factorial with the Y-combinator
+(((lambda (fn)
+    ((lambda (h) (h h))
+     (lambda (g)
+       (fn (lambda (x)
+             ((g g) x))))))
+  (lambda (f)
+    (lambda (n)
+      (if (zero? n)
+          1
+          (* n (f (- n 1))))))) 6)
+--}
+factYComb =
+  App
+    (Lambda ["m"] []
+      (App (App yComb
+            [Lambda ["f"] []
+             (Lambda ["n"] []
+              (If (App (Id "eqv?") [Id "n", Const (Number 0)])
+                  (Const (Number 1))
+                  (App (Id "*")
+                       [Id "n",
+                       App (Id "f")
+                       [App (Id "-") [Id "n", Const (Number 1)]]])))])
+          [Id "m"]))
+    [Const (Number 6)]
