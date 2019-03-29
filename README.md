@@ -1,4 +1,4 @@
-# Translating the R5RS Denotational Semantics into Haskell
+# Translating R5RS Scheme Denotational Semantics into Haskell
 
 Currently implements the entire definition of Scheme under Section 7.2
 "Formal Semantics" of the [R5RS
@@ -34,17 +34,16 @@ The Scheme program:
 ```
 Can be written in the Haskell `Expr` datatype as:
 ```haskell
-prog = App (Lambda ["x"] [] (App (Id "add") [Id "x", Id "x"])) [Const (Number 10)]
+prog = App (Lambda ["x"] [] (App (Id "+") [Id "x", Id "x"])) [Const (Number 10)]
 ```
-Which can be evaluated in a standard environment and store with 50
-cells of free space following the prelude:
+Which can be evaluated in a standard environment and infinite store by running.
 
 ```haskell
-evalStd prog 50
+evalStd prog
 ```
 
 The result is a triple (String, [E], S), consisting of a string, a
-list of results, and the final store.
+list of results, and the final store (up to the first empty cell).
 
 
 ### Factorial Example
@@ -87,6 +86,6 @@ We can run this program in the standard environment and store, with a
 free space of 50 cells, giving us _just_ enough free space.
 
 ```haskell
-λ> evalStd factYComb 50
-("Done.",[720],[(#<undefined>,False),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<unspecified>,True),(6,True),(#<unspecified>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(#<unspecified>,True),(#<procedure>,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(6,True),(5,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(5,True),(4,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(4,True),(3,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(3,True),(2,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(2,True),(1,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(1,True),(0,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(0,True),(#<undefined>,False)])
+λ> evalStd factYComb
+("Done.",[720],[(#<undefined>,False),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<procedure>,True),(#<unspecified>,True),(6,True),(#<unspecified>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(#<unspecified>,True),(#<procedure>,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(6,True),(5,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(5,True),(4,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(4,True),(3,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(3,True),(2,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(2,True),(1,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(1,True),(0,True),(#<procedure>,True),(#<unspecified>,True),(#<procedure>,True),(#<unspecified>,True),(0,True)])
 ```

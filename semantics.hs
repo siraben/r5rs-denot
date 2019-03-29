@@ -144,7 +144,7 @@ eval (Id i) p k =
     (envLookup p i)
     (single
        (\case
-          Em Undefined -> wrong ("Undefined variable: " ++ i ++ " " ++ show p)
+          Em Undefined -> wrong ("Undefined variable: " ++ i ++ " in environment " ++ show p)
           e -> send e k))
 eval (App e0 e) p k =
   evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
@@ -255,9 +255,9 @@ emptyEnv = []
 emptyStore :: S
 emptyStore = []
 
--- Generate a store of size n.
-genStore :: Int -> S
-genStore n = replicate n (Em Undefined, False)
+-- Generate an infinite store
+infStore :: S
+infStore = repeat (Em Undefined, False)
 
 replace :: Int -> a -> [a] -> [a]
 replace 0 x (_:as) = x : as
@@ -437,7 +437,7 @@ dropfirst = drop
 takefirst = take
 
 idKCont :: [E] -> S -> A
-idKCont e s = ("Done.", e, s)
+idKCont e s = ("Done.", e, take (new s) s)
 
 sId = Lambda ["x"] [] (Id "x")
 
@@ -462,13 +462,13 @@ sSndTest = App (App scSnd [Const (Number 3)]) [Const (Number 5)]
 
 addTest = App (Id "+") [Const (Number 3), Const (Number 5)]
 
-evalWithStore prog n = eval prog emptyEnv idKCont (genStore n)
+evalWithStore prog = eval prog emptyEnv idKCont infStore
 
-evalStd prog size = eval prog stdEnv idKCont (stdStore size)
+evalStd prog = eval prog stdEnv idKCont stdStore
 
--- Evaluate with an empty store of a given size.
+-- Evaluate with an infinite empty store.
 evalr :: Expr -> A
-evalr prog = evalWithStore prog 10
+evalr prog = evalWithStore prog
 
 -- Standard environment
 stdEnv :: U
@@ -498,8 +498,8 @@ stdPrelude =
   ]
 
 -- Create a standard store with a given size of free space.
-stdStore :: Int -> S
-stdStore n = stdPrelude ++ genStore n
+stdStore :: S
+stdStore = stdPrelude ++ infStore
 
 addTest2 =
   App (Lambda ["x"] [] (App (Id "+") [Id "x", Id "x"])) [Const (Number 10)]
