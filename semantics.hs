@@ -29,6 +29,7 @@ data Con
   | Number R
   | Character H
   | Nil
+  deriving (Eq)
 
 instance Show Con where
   show (Symbol q) = q
@@ -49,7 +50,7 @@ data E
 
 instance Show E where
   show (Ek con) = show con
-  show (Ep (car, cdr, _)) = concat ["(", show car, " . ", show cdr, " )"]
+  show (Ep (car, cdr, _)) = concat ["(", show car, " . ", show cdr, ")"]
   show (Ev (l, _)) = show l
   show (Es (l, _)) = show l
   show (Em m) = show m
@@ -61,6 +62,7 @@ data M
   | Null
   | Undefined
   | Unspecified
+  deriving (Eq)
 
 instance Show M where
   show (Boom True) = "#t"
@@ -236,7 +238,8 @@ single p es
 new :: S -> L
 new [] = error "empty store"
 -- Because lists are 1-indexed, we ignore the first element.
-new (_:l) = 1 +
+new (_:l) =
+  1 +
   fromMaybe
     (error "out of memory")
     (findIndex
@@ -346,6 +349,31 @@ cdr =
        (Ep (_, a, _)) -> hold a
        _ -> \_ -> wrong "non-pair argument to cdr")
 
+setcar :: [E] -> K -> C
+setcar =
+  twoarg
+    (\e1 e2 k ->
+       case e1 of
+         Ep (a, _, True) -> assign a e2 (send (Em Unspecified) k)
+         Ep _ -> wrong "immutable argument to set-car!"
+         _ -> wrong "non-pair argument to set-car!")
+
+eqv :: [E] -> K -> C
+eqv =
+  twoarg
+    (\e1 e2 ->
+       case (e1, e2) of
+         (Ek a, Ek b) -> retbool (a == b)
+         (Em a, Em b) -> retbool (a == b)
+         (Ev a, Ev b) -> retbool (a == b)
+         (Ep (a, x, _), Ep (b, y, _)) -> retbool ((a == b) && (x == y))
+         (Ef (a, _), Ef (b, _)) -> retbool (a == b)
+         _ -> retbool False)
+  where
+    retbool :: Bool -> K -> C
+    retbool b = send (Ek (Boolean b))
+
+apply :: [E] -> K -> C
 apply =
   twoarg
     (\e1 e2 k ->
@@ -361,14 +389,34 @@ valueslist =
          Ep _ ->
            cdr
              [e]
-             (\es ->
-                valueslist es (\es -> car [e] (single (\e -> k (e : es)))))
+             (\es -> valueslist es (\es -> car [e] (single (\e -> k (e : es)))))
          (Ek Nil) -> k []
          _ -> wrong "non-list argument to values-list")
 
 tievals :: ([L] -> C) -> [E] -> C
 tievals f [] s = f [] s
 tievals f (e:es) s = tievals (\as -> f (new s : as)) es (update (new s) e s)
+
+-- Call with current continuation
+cwcc :: [E] -> K -> C
+cwcc =
+  onearg
+    (\e k ->
+       case e of
+         Ef _ ->
+           \s ->
+             applicate
+               e
+               [Ef (new s, \es k' -> k es)]
+               k
+               (update (new s) (Em Unspecified) s)
+         _ -> wrong "bad procedure argument")
+
+values :: [E] -> K -> C
+values es k = k es
+
+-- Call with values
+cwv = twoarg (\e1 e2 k -> applicate e1 [] (\es -> applicate e2 es k))
 
 tievalsrest :: ([L] -> C) -> Int -> [E] -> C
 tievalsrest f es v =
@@ -392,35 +440,48 @@ scFst = Lambda ["x"] [] (Lambda ["y"] [] (Id "x"))
 
 scSnd = Lambda ["x"] [] (Lambda ["y"] [] (Id "y"))
 
--- Passes: returns 3
 idTest = App sId [Const (Number 3)]
 
--- Fails: returns 5 
 fstTest = App sFst [Const (Number 3), Const (Number 5)]
 
--- Passes: returns 5
 sndTest = App sSnd [Const (Number 3), Const (Number 5)]
 
 sFstTest = App (App scFst [Const (Number 3)]) [Const (Number 5)]
 
 sSndTest = App (App scSnd [Const (Number 3)]) [Const (Number 5)]
 
-
 addTest = (App (Id "add") [Const (Number 3), Const (Number 5)])
+
 evalWithStore prog n = eval prog emptyEnv idKCont (genStore n)
 
 evalStd prog = putStrLn $ eval prog stdEnv idKCont stdStore
+
 evalr prog = evalWithStore prog 10
 
-stdEnv = [("add", 3)]
+-- Standard environment
+stdEnv =
+  [("add", 1), ("mult", 2), ("sub", 3), ("cons", 4), ("car", 5), ("cdr", 6)]
 
-stdStore = [(Em Undefined, False),
-            (Em Undefined, False),
-            (Em Undefined, False),
-            (Ef (1, add), True)] ++ (genStore 10)
+-- Standard store
+stdStore =
+  [ (Em Undefined, False)
+  , (Ef (1, add), True)
+  , (Ef (2, mult), True)
+  , (Ef (3, sub), True)
+  , (Ef (4, cons), True)
+  , (Ef (5, car), True)
+  , (Ef (6, cdr), True)
+  ] ++
+  genStore 10
 
---            (Id "x", (Ek (Number 3)))
---           ] ++ (genStore 10)
+addTest2 =
+  App (Lambda ["x"] [] (App (Id "add") [Id "x", Id "x"])) [Const (Number 10)]
 
-addTest2 = App (Lambda ["x"] [] (App (Id "add") [Id "x", Id "x"]))
-               [Const (Number 10)]
+simpleList =
+  App
+    (Id "cons")
+    [Const (Number 10), (App (Id "cons") [Const (Number 20), Const Nil])]
+
+carTest = App (Id "car") [simpleList]
+
+cdrTest = App (Id "cdr") [simpleList]
