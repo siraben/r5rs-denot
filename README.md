@@ -82,8 +82,7 @@ factYComb =
     [Const (Number 6)]
 ```
 
-We can run this program in the standard environment and store, with a
-free space of 50 cells, giving us _just_ enough free space.
+We can run this program in the standard environment and infinite store.
 
 ```haskell
 λ> evalStd factYComb
