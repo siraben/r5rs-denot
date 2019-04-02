@@ -34,7 +34,7 @@ instance Show Con where
   show (Character h)   = "#\\" ++ [h]
   show (Number r)      = show r
   show (Boolean True)  = "#t"
-  show (Boolean False) = "#t"
+  show (Boolean False) = "#f"
   show Nil             = "()"
 
 -- Expressed values

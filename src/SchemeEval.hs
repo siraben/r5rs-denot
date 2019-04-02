@@ -179,38 +179,45 @@ factorial =
            factorial [Ek (Number (n - 1))] $ single $ \e -> mult [e, m] k
          _ -> wrong "non-numeric argument to factorial")
 
+makeNumBinop name constructor op =
+  twoarg
+    (\e1 e2 k ->
+       case e1 of
+         (Ek (Number r1)) ->
+           case e2 of
+             (Ek (Number r2)) -> send (constructor (op r1 r2)) k
+             _                -> wrong ("non-numeric argument to " ++ name)
+         _ -> wrong ("non-numeric argument to " ++ name))
+    
 add :: [E] -> K -> C
-add =
-  twoarg
-    (\e1 e2 k ->
-       case e1 of
-         (Ek (Number r1)) ->
-           case e2 of
-             (Ek (Number r2)) -> send (Ek (Number (r1 + r2))) k
-             _                -> wrong "non-numeric argument to +"
-         _ -> wrong "non-numeric argument to +")
+add = makeNumBinop "+" (Ek . Number) (+)
 
+less :: [E] -> K -> C
+less = makeNumBinop "<" (Ek . Boolean) (<)
+
+more :: [E] -> K -> C
+more = makeNumBinop ">" (Ek . Boolean) (>)
+
+eqli :: [E] -> K -> C
+eqli = makeNumBinop "=" (Ek . Boolean) (==)
+
+eqlig :: [E] -> K -> C
+eqlig = makeNumBinop ">=" (Ek . Boolean) (>=)
+
+eqlilt :: [E] -> K -> C
+eqlilt = makeNumBinop "<=" (Ek . Boolean) (<=)
+        
 mult :: [E] -> K -> C
-mult =
-  twoarg
-    (\e1 e2 k ->
-       case e1 of
-         (Ek (Number r1)) ->
-           case e2 of
-             (Ek (Number r2)) -> send (Ek (Number (r1 * r2))) k
-             _                -> wrong "non-numeric argument to *"
-         _ -> wrong "non-numeric argument to *")
+mult = makeNumBinop "*" (Ek . Number) (*)
 
 sub :: [E] -> K -> C
-sub =
-  twoarg
-    (\e1 e2 k ->
-       case e1 of
-         (Ek (Number r1)) ->
-           case e2 of
-             (Ek (Number r2)) -> send (Ek (Number (r1 - r2))) k
-             _                -> wrong "non-numeric argument to -"
-         _ -> wrong "non-numeric argument to -")
+sub = makeNumBinop "-" (Ek . Number) (-)
+
+smod :: [E] -> K -> C
+smod = makeNumBinop "mod" (Ek . Number) (mod)
+
+sdiv :: [E] -> K -> C
+sdiv = makeNumBinop "div" (Ek . Number) (div)
 
 car :: [E] -> K -> C
 car =
@@ -305,29 +312,6 @@ takefirst = take
 idKCont :: [E] -> S -> A
 idKCont e s = ("", Just e, take (new s) s)
 
-sId = Lambda ["x"] [] (Id "x")
-
-sFst = Lambda ["x", "y"] [] (Id "x")
-
-sSnd = Lambda ["x", "y"] [] (Id "y")
-
--- Curried first and second.
-scFst = Lambda ["x"] [] (Lambda ["y"] [] (Id "x"))
-
-scSnd = Lambda ["x"] [] (Lambda ["y"] [] (Id "y"))
-
-idTest = App sId [Const (Number 3)]
-
-fstTest = App sFst [Const (Number 3), Const (Number 5)]
-
-sndTest = App sSnd [Const (Number 3), Const (Number 5)]
-
-sFstTest = App (App scFst [Const (Number 3)]) [Const (Number 5)]
-
-sSndTest = App (App scSnd [Const (Number 3)]) [Const (Number 5)]
-
-addTest = App (Id "+") [Const (Number 3), Const (Number 5)]
-
 evalWithStore prog = eval prog emptyEnv idKCont infStore
 
 evalStd prog = eval prog stdEnv idKCont stdStore
@@ -344,9 +328,17 @@ makeOpStore loc op = (Ef (loc, op), True)
 builtInOps = [("+", add),
               ("*", mult),
               ("-", sub),
+              ("/", sdiv),
+              ("mod", smod),
+              ("<", less),
+              (">", more),
+              ("=", eqli),
+              (">=", eqlig),
+              ("<=", eqlilt),
               ("cons", cons),
               ("car", car),
               ("cdr", cdr),
+              ("list", list),
               ("eqv?", eqv),
               ("set-car!", setcar),
               ("apply", apply),
@@ -368,73 +360,3 @@ stdPrelude = [(Em Undefined, False)] ++ zipWith makeOpStore [1..] stdOps
 -- Create a standard store with a given size of free space.
 stdStore :: S
 stdStore = stdPrelude ++ infStore
-
-addTest2 =
-  App (Lambda ["x"] [] (App (Id "+") [Id "x", Id "x"])) [Const (Number 10)]
-
-simpleList =
-  App
-    (Id "cons")
-    [Const (Number 10), App (Id "cons") [Const (Number 20), Const Nil]]
-
-carTest = App (Id "car") [simpleList]
-
-cdrTest = App (Id "cdr") [simpleList]
-
-factTest =
-  App (Lambda ["x"] [] (App (Id "factorial") [Id "x"])) [Const (Number 6)]
-
-ifTest :: Expr
-ifTest =
-  App
-    (Lambda
-       ["x"]
-       []
-       (If
-          (App (Id "eqv?") [Id "x", Const (Number 0)])
-          (Const (Number 10))
-          (Const (Number 20))))
-    [Const (Number 0)]
-
-yComb =
-  Lambda
-    ["fn"]
-    []
-    (App
-       (Lambda ["h"] [] (App (Id "h") [Id "h"]))
-       [ Lambda
-           ["g"]
-           []
-           (App
-              (Id "fn")
-              [Lambda ["x"] [] (App (App (Id "g") [Id "g"]) [Id "x"])])
-       ])
-
-
-{--
-Factorial with the Y-combinator
-(((lambda (fn)
-    ((lambda (h) (h h))
-     (lambda (g)
-       (fn (lambda (x)
-             ((g g) x))))))
-  (lambda (f)
-    (lambda (n)
-      (if (zero? n)
-          1
-          (* n (f (- n 1))))))) 6)
---}
-factYComb =
-  App
-    (Lambda ["m"] []
-      (App (App yComb
-            [Lambda ["f"] []
-             (Lambda ["n"] []
-              (If (App (Id "eqv?") [Id "n", Const (Number 0)])
-                  (Const (Number 1))
-                  (App (Id "*")
-                       [Id "n",
-                       App (Id "f")
-                       [App (Id "-") [Id "n", Const (Number 1)]]])))])
-          [Id "m"]))
-    [Const (Number 6)]
