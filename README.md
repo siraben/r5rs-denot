@@ -45,18 +45,28 @@ Ensure Cabal is installed and build this project by running `cabal
 run`.  The REPL will boot up.  Type an expression and hit ENTER to
 evaluate it.
 
-### Factorial and REPL Example
+### Usage Examples
 ```scheme
 Scheme> (((lambda (fn) ((lambda (h) (h h)) (lambda (g) (fn (lambda (x) ((g g) x)))))) (lambda (f) (lambda (n) (if (eqv? 0 n) 1 (* n (f (- n 1))))))) 6)
 720
 Memory used: 47 cells
 ```
-Alternatively, read it from a file called `factorial.scm`, then run
-`cabal repl` and type `repf "factorial.scm"` into GHCi.
+Alternatively, read it from a file in the `demo` folder, using GHCi:
 ```text
-*SchemeRepl> repf "factorial.scm" 
+-- Factorial
+*SchemeRepl> repf "demo/factorial.scm" 
 720
 Memory used: 59 cells
+
+-- Streams
+*SchemeRepl> repf "demo/streams.scm" 
+(2 . (3 . (5 . (7 . (11 . (13 . (17 . (19 . (23 . (29 . (31 . (37 . (41 . (43 . (47 . (53 . (59 . (61 . (67 . (71 . ()))))))))))))))))))))
+Memory used: 6410 cells
+
+-- Mutable state
+*SchemeRepl> repf "demo/counter.scm" 
+(1 . (2 . (3 . (4 . ()))))
+Memory used: 15 cells
 ```
 ## Scheme AST as a Haskell Datatype
 The Scheme program:

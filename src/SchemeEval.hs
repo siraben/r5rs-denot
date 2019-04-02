@@ -27,10 +27,6 @@ eval (IfPartial e0 e1) p k =
     if truish e
       then eval e1 p k
       else send (Em Unspecified) k
--- twoarg
---   (\e1 e2 k s ->
---      (\s' -> send (Ep (new s, new s', True)) k (update (new s') e2 s'))
---        (update (new s) e1 s))
 eval (Lambda is gs e0) p k =
   \s ->
     send
@@ -122,10 +118,6 @@ emptyEnv = []
 emptyStore :: S
 emptyStore = []
 
--- Generate an infinite store
-infStore :: S
-infStore = repeat (Em Undefined, False)
-
 replace :: Int -> a -> [a] -> [a]
 replace 0 x (_:as) = x : as
 replace n x (a:as) = a : replace (n - 1) x as
@@ -214,7 +206,7 @@ sub :: [E] -> K -> C
 sub = makeNumBinop "-" (Ek . Number) (-)
 
 smod :: [E] -> K -> C
-smod = makeNumBinop "mod" (Ek . Number) (mod)
+smod = makeNumBinop "modulo" (Ek . Number) (mod)
 
 sdiv :: [E] -> K -> C
 sdiv = makeNumBinop "div" (Ek . Number) (div)
@@ -299,7 +291,7 @@ cwcc =
 values :: [E] -> K -> C
 values es k = k es
 
--- Call with values
+-- |Call with values
 cwv = twoarg (\e1 e2 k -> applicate e1 [] (\es -> applicate e2 es k))
 
 tievalsrest :: ([L] -> C) -> Int -> [E] -> C
@@ -309,27 +301,23 @@ tievalsrest f es v =
 dropfirst = drop
 takefirst = take
 
+-- |The "normal" continuation.
 idKCont :: [E] -> S -> A
 idKCont e s = ("", Just e, take (new s) s)
 
-evalWithStore prog = eval prog emptyEnv idKCont infStore
-
+-- |Evaluate an expression with the standard environment and store.
 evalStd prog = eval prog stdEnv idKCont stdStore
 
--- Evaluate with an infinite empty store.
-evalr :: Expr -> A
-evalr prog = evalWithStore prog
-
--- Standard environment
+-- |The standard environment
 stdEnv :: U
 stdEnv = zip stdEnvNames [1..]
 
-makeOpStore loc op = (Ef (loc, op), True)
+-- |The list of built-in ops.
 builtInOps = [("+", add),
               ("*", mult),
               ("-", sub),
               ("/", sdiv),
-              ("mod", smod),
+              ("modulo", smod),
               ("<", less),
               (">", more),
               ("=", eqli),
@@ -347,16 +335,22 @@ builtInOps = [("+", add),
               ("call/cc", cwcc)
              ]
 
+-- |The list of names of standard operations.
 stdEnvNames :: [String]
 stdEnvNames = map fst builtInOps
 
+-- |The list of standard operations.
 stdOps :: [[E] -> K -> C]
 stdOps = map snd builtInOps
 
--- Standard base store.
+-- |The standard prelude.
 stdPrelude :: S
 stdPrelude = [(Em Undefined, False)] ++ zipWith makeOpStore [1..] stdOps
+  where
+    makeOpStore loc op = (Ef (loc, op), True)
 
--- Create a standard store with a given size of free space.
+-- |The standard store, consisting of a Prelude and infinite space.
 stdStore :: S
 stdStore = stdPrelude ++ infStore
+  where
+    infStore = repeat (Em Undefined, False)
