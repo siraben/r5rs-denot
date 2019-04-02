@@ -37,7 +37,7 @@ eval (Lambda is gs e0) p k =
                then tievals
                       ((\p' -> evalc gs p' (eval e0 p' k')) . extends p is)
                       es
-               else wrong ("wrong number of arguments, expected " ++ show (length is) ++ ", namely " ++ show is)))
+               else wrong ("wrong number of arguments, expected " ++ show (length is) ++ ", namely " ++ show is ++ " but got " ++ show (length es) ++ " instead")))
       k
       (update (new s) (Em Unspecified) s)
 eval (LambdaV is i gs e0) p k =
@@ -130,7 +130,7 @@ assign a e t s = t $ update a e s
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
-truish (Ek (Boolean True))  = True
+truish _  = True
 
 -- |Permute an expression list (as the order of evaluation of
 -- arguments is undefined in Scheme).  Must be an inverse operation to
@@ -156,7 +156,7 @@ onearg _ a _   = wrong ("wrong number of arguments, expected 1 but got " ++ show
 
 twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg x [e1, e2] k = x e1 e2 k
-twoarg _ a _        = wrong ("wrong number of arguments, expected 2 but got " ++ show (length a))
+twoarg _ a _        = wrong ("wrong number of arguments, expected 2 but got " ++ show (length a) ++ ": " ++ show a)
 
 -- |Scheme @list@, also an example of how Scheme procedures can be
 -- defined from other ones, but written in CPS.
