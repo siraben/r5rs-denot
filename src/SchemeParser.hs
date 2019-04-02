@@ -10,8 +10,8 @@ including various instance declarations for the 'Functor', 'Monad',
 
 module SchemeParser where
 
-import Data.Char
-import SchemeTypes
+import           Data.Char
+import           SchemeTypes
 
 newtype Parser a =
   Parser (String -> [(a, String)])
@@ -61,7 +61,7 @@ p +++ q =
   Parser
     (\cs ->
        case parse (p <|> q) cs of
-         [] -> []
+         []     -> []
          (x:xs) -> [x])
 
 -- |Lift a predicate into a parser.
@@ -132,14 +132,14 @@ digit = sat isDigit
 
 schemeComment = do
   char ';'
-  many (sat (\c -> c /= '\n'))
+  many (sat  (/= '\n'))
   return ' '
 
 schemeWhitespace = char ' ' <|> char '\n' <|> char '\t' <|> schemeComment
 
 -- |Parse whitespace.
 space :: Parser String
-space = many $ schemeWhitespace
+space = many schemeWhitespace
 
 -- |Lifts a parser into a whitespace-prefixed accepting one.
 token :: Parser a -> Parser a
@@ -248,8 +248,8 @@ schemeLambda = do
   rparen
   let (cmds, expr) = unsnoc exprs
    in case fs of
-        (args, Nothing) -> return $ Lambda args cmds expr
-        ([], Just name) -> return $ LambdaVV name cmds expr
+        (args, Nothing)   -> return $ Lambda args cmds expr
+        ([], Just name)   -> return $ LambdaVV name cmds expr
         (args, Just rest) -> return $ LambdaV args rest cmds expr
 
 unsnoc xs = loop [] xs
@@ -260,12 +260,42 @@ unsnoc xs = loop [] xs
         (x:xs) -> loop (x : hs) xs
         [] -> error "empty"
 
-schemeQuotable =
-  schemeNum <|> schemeBool <|> schemeNil <|> do
-  {
-    x <- schemeId;
-    return $ Const (Symbol x)
+
+reifyQuotedList :: [Expr] -> Expr
+reifyQuotedList []     = error "cannot reify empty list"
+reifyQuotedList [e]    = App (Id "cons") [e, Const Nil]
+reifyQuotedList (e:es) = App (Id "cons") [e,reifyQuotedList es]
+
+reifyImproperList :: [Expr] -> Expr
+reifyImproperList [e, v] = App (Id "cons") [e, v]
+reifyImproperList (e:es) = App (Id "cons") [e,reifyImproperList es]
+
+x = do { schemeExpr  `sepby1` space  }
+schemeQuotedList = do {
+  lparen;
+  exprs <- schemeQuotable `sepby1` space;
+  rparen;
+  return $ reifyQuotedList exprs }
+  <|> do {
+  lparen;
+  exprs <- schemeQuotable `sepby1` space;
+  dot;
+  last <- schemeQuotable;
+  rparen;
+  return $ reifyImproperList (exprs ++ [last])
   }
+
+
+
+schemeQuotable =
+  schemeNum <|> schemeBool <|> schemeNil <|>
+  do { Const . Symbol <$> schemeId } <|> schemeQuotedList <|>
+  do {
+   x <- schemeQuoted;
+   return $ App (Id "cons") [Const (Symbol "quote"), App (Id "cons") [x, Const Nil]]
+}
+   
+
 
 schemeQuoted =
   do char '\''
@@ -325,9 +355,7 @@ schemeExpr :: Parser Expr
 schemeExpr =
   schemeLambda <|> schemeIf <|> schemeSet <|> schemeQuoted <|> schemeApp <|>
   schemeNum <|>
-  schemeBool <|> do {
-    x <- schemeId;
-    return $ Id x }
+  schemeBool <|> do Id <$> schemeId
 
 parseExpr = do
   space
@@ -339,4 +367,4 @@ readExpr :: String -> Maybe Expr
 readExpr s =
   case parse parseExpr s of
     (res, ""):_ -> Just res
-    _ -> Nothing
+    _           -> Nothing

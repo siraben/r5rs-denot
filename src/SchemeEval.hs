@@ -132,12 +132,18 @@ truish :: E -> T
 truish (Ek (Boolean False)) = False
 truish (Ek (Boolean True))  = True
 
+-- |Permute an expression list (as the order of evaluation of
+-- arguments is undefined in Scheme).  Must be an inverse operation to
+-- @unpermute@.
 permute :: [Expr] -> [Expr]
 permute = id
 
+-- |Unpermute a value list (as the order of evaluation of arguments is
+-- undefined in Scheme).  Must be an inverse operation to @permute@.
 unpermute :: [E] -> [E]
 unpermute = id
 
+-- |Apply a Scheme procedure to a list of values, passing them as operands.
 applicate :: E -> [E] -> K -> C
 applicate (Ef e) es k = snd e es k
 applicate a _ _       = wrong ("failed to apply " ++
@@ -152,10 +158,13 @@ twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg x [e1, e2] k = x e1 e2 k
 twoarg _ a _        = wrong ("wrong number of arguments, expected 2 but got " ++ show (length a))
 
+-- |Scheme @list@, also an example of how Scheme procedures can be
+-- defined from other ones, but written in CPS.
 list :: [E] -> K -> C
 list [] k     = send (Ek Nil) k
 list (x:xs) k = list xs $ single $ \e -> cons [x, e] k
 
+-- |Scheme @cons@.
 cons :: [E] -> K -> C
 cons =
   twoarg
@@ -218,14 +227,14 @@ car =
   onearg
     (\case
        (Ep (a, _, _)) -> hold a
-       _ -> \_ -> wrong "non-pair argument to car")
+       a -> \_ -> wrong ("non-pair argument to car: " ++ show a))
 
 cdr :: [E] -> K -> C
 cdr =
   onearg
     (\case
        (Ep (_, a, _)) -> hold a
-       _ -> \_ -> wrong "non-pair argument to cdr")
+       a -> \_ -> wrong ("non-pair argument to cdr: " ++ show a))
 
 setcar :: [E] -> K -> C
 setcar =
@@ -332,10 +341,11 @@ cwcc =
                (update (new s) (Em Unspecified) s)
          _ -> wrong ("bad procedure argument, got " ++ show e))
 
+-- |Scheme @values@
 values :: [E] -> K -> C
 values es k = k es
 
--- |Call with values
+-- |Scheme @call-with-values@
 cwv = twoarg (\e1 e2 k -> applicate e1 [] (\es -> applicate e2 es k))
 
 tievalsrest :: ([L] -> C) -> Int -> [E] -> C
@@ -356,7 +366,7 @@ evalStd prog = eval prog stdEnv idKCont stdStore
 stdEnv :: U
 stdEnv = zip stdEnvNames [1..]
 
--- |The list of built-in ops.
+-- |The list of built-in operations.
 builtInOps = [("+", add),
               ("*", mult),
               ("-", sub),

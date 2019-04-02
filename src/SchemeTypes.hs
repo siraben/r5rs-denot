@@ -130,18 +130,6 @@ data Expr
   | Set Ide
         Expr
 
-
-data AST = Keyword String
-         | Identifier String
-         | Nat Integer
-         | Call AST [AST]
-         | LambdaExp [String] [AST] AST
-         | LambdaExpR String [AST] AST
-         | LambdaExpO [AST] String [AST] AST
-         | Assign String AST
-         | EmptyList
-         deriving Show
-
 instance Show Expr where
   show (Const con) = show con
   show (Id ide) = ide
