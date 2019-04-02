@@ -234,6 +234,15 @@ setcar =
          Ep _            -> wrong "immutable argument to set-car!"
          _               -> wrong "non-pair argument to set-car!")
 
+setcdr :: [E] -> K -> C
+setcdr =
+  twoarg
+    (\e1 e2 k ->
+       case e1 of
+         Ep (_, a, True) -> assign a e2 (send (Em Unspecified) k)
+         Ep _            -> wrong "immutable argument to set-cdr!"
+         _               -> wrong "non-pair argument to set-cdr!")
+
 eqv :: [E] -> K -> C
 eqv =
   twoarg
@@ -245,9 +254,42 @@ eqv =
          (Ep (a, x, _), Ep (b, y, _)) -> retbool ((a == b) && (x == y))
          (Ef (a, _), Ef (b, _))       -> retbool (a == b)
          _                            -> retbool False)
-  where
-    retbool :: Bool -> K -> C
-    retbool b = send (Ek (Boolean b))
+retbool :: Bool -> K -> C
+retbool b = send (Ek (Boolean b))    
+
+predLift :: (E -> Bool) -> [E] -> K -> C
+predLift p = onearg (\x -> retbool (p x))
+
+numberp :: [E] -> K -> C
+numberp = predLift p where
+  p (Ek (Number _)) = True
+  p _ = False
+
+booleanp :: [E] -> K -> C
+booleanp = predLift p where
+  p (Ek (Boolean _)) = True
+  p _ = False
+
+symbolp :: [E] -> K -> C
+symbolp = predLift p where
+  p (Ek (Symbol _)) = True
+  p _ = False
+
+procedurep :: [E] -> K -> C
+procedurep = predLift p where
+  p (Ef _) = True
+  p _ = False
+
+pairp :: [E] -> K -> C
+pairp = predLift p where
+  p (Ep _) = True
+  p _ = False
+
+nullp :: [E] -> K -> C
+nullp = predLift p where
+  p (Ek Nil) = True
+  p _ = False
+
 
 apply :: [E] -> K -> C
 apply =
@@ -328,9 +370,17 @@ builtInOps = [("+", add),
               ("cdr", cdr),
               ("list", list),
               ("eqv?", eqv),
+              ("boolean?", booleanp),
+              ("symbol?", symbolp),
+              ("procedure?", procedurep),
+              ("pair?", pairp),
+              ("number?", numberp),
               ("set-car!", setcar),
+              ("set-cdr!", setcdr),
+              ("null?", nullp),
               ("apply", apply),
               ("call-with-values", cwv),
+              ("values", values),
               ("call-with-current-continuation", cwcc),
               ("call/cc", cwcc)
              ]

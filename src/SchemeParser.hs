@@ -210,7 +210,9 @@ schemeId =
 
 lparen = symb "("
 
-rparen = symb ")"
+rparen = do
+  space
+  symb ")"
 
 dot = do
   space
