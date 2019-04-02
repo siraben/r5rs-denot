@@ -205,16 +205,19 @@ lparen = symb "("
 
 rparen = symb ")"
 
-dot = symb "."
+dot = do
+  space
+  char '.'
+  space
 
 formals :: Parser ([Ide], Maybe Ide)
 formals =
-  do x <- schemeId
-     return ([], Just x)
-     <|> do
-    lparen
-    rparen
-    return ([], Nothing) <|> do {
+  do { x <- schemeId;
+     return ([], Just x) } <|> do {
+    lparen;
+    rparen;
+    return ([], Nothing)
+     } <|> do {
     lparen;
     names <- schemeId `sepby1` space;
     dot;
@@ -231,6 +234,7 @@ schemeLambda = do
   lparen
   symb "lambda"
   fs <- formals
+  space
   exprs <- schemeExpr `sepby1` space
   rparen
   let (cmds, expr) = unsnoc exprs
@@ -259,7 +263,7 @@ schemeQuoted =
      schemeQuotable
      <|> do
     lparen
-    symb "quote"
+    string "quote"
     space
     x <- schemeQuotable
     rparen
@@ -278,8 +282,10 @@ schemeApp = do
 
 schemeSet = do
   lparen
-  symb "set!"
+  string "set!"
+  space
   n <- schemeId
+  space
   exp <- schemeExpr
   rparen
   return $ Set n exp
@@ -287,16 +293,21 @@ schemeSet = do
 schemeIf =
   do {
     lparen;
-     symb "if";
+     string "if";
+     space;
      p <- schemeExpr;
+     space;
      c <- schemeExpr;
+     space;
      a <- schemeExpr;
      rparen;
      return $ If p c a
     } <|> do
     lparen
-    symb "if"
+    string "if"
+    space
     p <- schemeExpr
+    space
     c <- schemeExpr
     rparen
     return $ IfPartial p c
@@ -307,13 +318,16 @@ schemeExpr =
   schemeNum <|>
   schemeBool <|> do {
     x <- schemeId;
-    return $ Id x } <|>  schemeBool
-    
+    return $ Id x }
+
+parseExpr = do
+  space
+  schemeExpr
 
 -- |Parse a string into a Scheme 'Expr', but return @Nothing@ if there
 -- was unconsumed input.
 readExpr :: String -> Maybe Expr
 readExpr s =
-  case parse schemeExpr s of
+  case parse parseExpr s of
     (res, ""):_ -> Just res
     _ -> Nothing

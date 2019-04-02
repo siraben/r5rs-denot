@@ -8,7 +8,7 @@ import           System.IO
 
 -- |Parse and evaluate a string.
 reval :: String -> A
-reval s = case parse schemeExpr s of
+reval s = case parse parseExpr s of
   (res, ""  ) : _ -> evalStd res
   (_  , rest) : _ -> ("Unexpected characters: " ++ rest, [], emptyStore)
   []              -> ("Parsing failed" , [], emptyStore)
