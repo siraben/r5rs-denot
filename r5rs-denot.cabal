@@ -18,7 +18,7 @@ extra-source-files:  CHANGELOG.md, README.md
 
 executable r5rs-denot
   main-is:             Main.hs
-  other-modules: SchemeEval, SchemeParser, SchemeTypes
+  other-modules: SchemeRepl, SchemeEval, SchemeParser, SchemeTypes
   -- other-extensions:
   build-depends:       base ^>=4.12.0.0
   hs-source-dirs:      src

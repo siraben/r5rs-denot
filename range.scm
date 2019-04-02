@@ -1,0 +1,21 @@
+((lambda (recursive)
+   ((lambda (range square map)
+      (map square (range 5)))
+    (recursive
+     (lambda (range)
+       (lambda (n)
+         (if (eqv? 0 n)
+             '()
+             (cons n (range (- n 1)))))))
+    (lambda (x) (* x x))
+    (recursive
+     (lambda (map)
+       (lambda (f l)
+         (if (eqv? '() l)
+             '()
+             (cons (f (car l)) (map f (cdr l)))))))))
+ (lambda (fn)
+   ((lambda (h) (h h))
+    (lambda (g)
+      (fn (lambda arglist
+            (apply (g g) arglist)))))))

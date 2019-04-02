@@ -130,9 +130,16 @@ p `chainl1` op = do
 digit :: Parser Char
 digit = sat isDigit
 
--- |Parser leading whitespace.
+schemeComment = do
+  char ';'
+  many (sat (\c -> c /= '\n'))
+  return ' '
+  
+schemeWhitespace = char ' ' <|> char '\n' <|> char '\t' <|> schemeComment
+
+-- |Parse whitespace.
 space :: Parser String
-space = many $ sat isSpace
+space = many $ schemeWhitespace
 
 -- |Lifts a parser into a whitespace-prefixed accepting one.
 token :: Parser a -> Parser a
@@ -255,7 +262,7 @@ schemeQuotable =
   schemeNum <|> schemeBool <|> schemeNil <|> do
   {
     x <- schemeId;
-    return $ Id x
+    return $ Const (Symbol x)
   }
 
 schemeQuoted =

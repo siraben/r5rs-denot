@@ -1,4 +1,5 @@
 module SchemeTypes where
+import Data.List
 
 -- Locations
 type L = Int
@@ -53,6 +54,16 @@ instance Show E where
   show (Em m)             = show m
   show (Ef f)             = "#<procedure>"
 
+showFull :: E -> S -> String
+showFull l s = show' l where
+  show' (Ep (car, cdr, _)) =
+    concat ["(",
+            show' (fst (s !! car)),
+            " . ",
+            show' (fst (s !! cdr)),
+            ")"]
+  show' a = show a
+
 -- Miscellaneous
 data M
   = Boom T
@@ -84,7 +95,7 @@ type C = S -> A
 type K = [E] -> C
 
 -- Answer
-type A = (String, [E], S)
+type A = (String, Maybe [E], S)
 
 -- Errors
 newtype X a =

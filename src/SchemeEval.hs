@@ -4,7 +4,6 @@ import SchemeTypes
 import           Data.List
 import           Data.Maybe
 
-
 eval :: Expr -> U -> K -> C
 eval (Const a) p k = send (Ek a) k
 eval (Id i) p k =
@@ -12,7 +11,7 @@ eval (Id i) p k =
     (envLookup p i)
     (single
        (\case
-          Em Undefined -> wrong ("Undefined variable: " ++ i ++ " in environment " ++ show p)
+          Em Undefined -> wrong ("Undefined variable: " ++ i)
           e -> send e k))
 eval (App e0 e) p k =
   evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
@@ -86,7 +85,7 @@ send :: E -> K -> C
 send e k = k [e]
 
 wrong :: String -> C
-wrong a p = ("Error: " ++ a, [], p)
+wrong a p = (a, Nothing, p)
 
 hold :: L -> K -> C
 hold a k s = send (fst (s !! a)) k s
@@ -301,11 +300,10 @@ tievalsrest f es v =
   list (dropfirst es v) (single (\e -> tievals f (takefirst es v ++ [e])))
 
 dropfirst = drop
-
 takefirst = take
 
 idKCont :: [E] -> S -> A
-idKCont e s = ("Done.", e, take (new s) s)
+idKCont e s = ("", Just e, take (new s) s)
 
 sId = Lambda ["x"] [] (Id "x")
 
@@ -340,30 +338,32 @@ evalr prog = evalWithStore prog
 
 -- Standard environment
 stdEnv :: U
-stdEnv =
-  [ ("+", 1)
-  , ("*", 2)
-  , ("-", 3)
-  , ("cons", 4)
-  , ("car", 5)
-  , ("cdr", 6)
-  , ("eqv?", 7)
-  , ("factorial", 8)
-  ]
+stdEnv = zip stdEnvNames [1..]
+
+makeOpStore loc op = (Ef (loc, op), True)
+builtInOps = [("+", add),
+              ("*", mult),
+              ("-", sub),
+              ("cons", cons),
+              ("car", car),
+              ("cdr", cdr),
+              ("eqv?", eqv),
+              ("set-car!", setcar),
+              ("apply", apply),
+              ("call-with-values", cwv),
+              ("call-with-current-continuation", cwcc),
+              ("call/cc", cwcc)
+             ]
+
+stdEnvNames :: [String]
+stdEnvNames = map fst builtInOps
+
+stdOps :: [[E] -> K -> C]
+stdOps = map snd builtInOps
 
 -- Standard base store.
 stdPrelude :: S
-stdPrelude =
-  [ (Em Undefined, False)
-  , (Ef (1, add), True)
-  , (Ef (2, mult), True)
-  , (Ef (3, sub), True)
-  , (Ef (4, cons), True)
-  , (Ef (5, car), True)
-  , (Ef (6, cdr), True)
-  , (Ef (7, eqv), True)
-  , (Ef (8, factorial), True)
-  ]
+stdPrelude = [(Em Undefined, False)] ++ zipWith makeOpStore [1..] stdOps
 
 -- Create a standard store with a given size of free space.
 stdStore :: S
