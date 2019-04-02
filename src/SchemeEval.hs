@@ -37,7 +37,7 @@ eval (Lambda is gs e0) p k =
                then tievals
                       ((\p' -> evalc gs p' (eval e0 p' k')) . extends p is)
                       es
-               else wrong "wrong number of arguments"))
+               else wrong ("wrong number of arguments, expected " ++ show (length is) ++ ", namely " ++ show is)))
       k
       (update (new s) (Em Unspecified) s)
 eval (LambdaV is i gs e0) p k =
@@ -52,7 +52,7 @@ eval (LambdaV is i gs e0) p k =
                        extends p (is ++ [i]))
                       (length is)
                       es
-               else wrong "too few arguments"))
+               else wrong ("too few arguments, expected at least " ++ show (length is) ++ ", namely " ++ show is)))
       k
       (update (new s) (Em Unspecified) s)
 eval (LambdaVV i gs e0) p k = eval (LambdaV [] i gs e0) p k
@@ -89,7 +89,7 @@ hold a k s = send (fst (s !! a)) k s
 single :: (E -> C) -> K
 single p es
   | length es == 1 = p $ head es
-  | otherwise = wrong "wrong number of return values"
+  | otherwise = wrong ("wrong number of return values, expected 1 but got " ++ show (length es))
 
 -- new :: S -> Either String L
 -- new [] = Left "empty store"
@@ -140,15 +140,17 @@ unpermute = id
 
 applicate :: E -> [E] -> K -> C
 applicate (Ef e) es k = snd e es k
-applicate _ _ _       = wrong "bad procedure"
+applicate a _ _       = wrong ("failed to apply " ++
+                               show a ++
+                               ", expected a procedure")
 
 onearg :: (E -> K -> C) -> ([E] -> K -> C)
 onearg x [e] k = x e k
-onearg _ _ _   = wrong "wrong number of arguments"
+onearg _ a _   = wrong ("wrong number of arguments, expected 1 but got " ++ show (length a))
 
 twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg x [e1, e2] k = x e1 e2 k
-twoarg _ _ _        = wrong "wrong number of arguments"
+twoarg _ a _        = wrong ("wrong number of arguments, expected 2 but got " ++ show (length a))
 
 list :: [E] -> K -> C
 list [] k     = send (Ek Nil) k
@@ -178,8 +180,8 @@ makeNumBinop name constructor op =
          (Ek (Number r1)) ->
            case e2 of
              (Ek (Number r2)) -> send (constructor (op r1 r2)) k
-             _                -> wrong ("non-numeric argument to " ++ name)
-         _ -> wrong ("non-numeric argument to " ++ name))
+             a                -> wrong ("non-numeric argument to " ++ name ++ ", got " ++ show a ++ " instead")
+         a -> wrong ("non-numeric argument to " ++ name ++ ", got " ++ show a ++ " instead"))
     
 add :: [E] -> K -> C
 add = makeNumBinop "+" (Ek . Number) (+)
@@ -232,7 +234,7 @@ setcar =
        case e1 of
          Ep (a, _, True) -> assign a e2 (send (Em Unspecified) k)
          Ep _            -> wrong "immutable argument to set-car!"
-         _               -> wrong "non-pair argument to set-car!")
+         a               -> wrong ("non-pair argument to set-cdr! got " ++ show a))
 
 setcdr :: [E] -> K -> C
 setcdr =
@@ -241,7 +243,7 @@ setcdr =
        case e1 of
          Ep (_, a, True) -> assign a e2 (send (Em Unspecified) k)
          Ep _            -> wrong "immutable argument to set-cdr!"
-         _               -> wrong "non-pair argument to set-cdr!")
+         a               -> wrong ("non-pair argument to set-cdr! got " ++ show a))
 
 eqv :: [E] -> K -> C
 eqv =
@@ -297,7 +299,7 @@ apply =
     (\e1 e2 k ->
        case e1 of
          Ef f -> valueslist [e2] (\es -> applicate e1 es k)
-         _    -> wrong "bad procedure argument to apply")
+         a    -> wrong ("bad procedure argument to apply, got " ++ show a))
 
 valueslist :: [E] -> K -> C
 valueslist =
@@ -309,7 +311,7 @@ valueslist =
              [e]
              (\es -> valueslist es (\es -> car [e] (single (\e -> k (e : es)))))
          (Ek Nil) -> k []
-         _ -> wrong "non-list argument to values-list")
+         a -> wrong ("non-list argument to values-list, got " ++ show a))
 
 tievals :: ([L] -> C) -> [E] -> C
 tievals f [] s     = f [] s
@@ -328,7 +330,7 @@ cwcc =
                [Ef (new s, \es k' -> k es)]
                k
                (update (new s) (Em Unspecified) s)
-         _ -> wrong "bad procedure argument")
+         _ -> wrong ("bad procedure argument, got " ++ show e))
 
 values :: [E] -> K -> C
 values es k = k es
