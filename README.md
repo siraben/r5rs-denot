@@ -47,25 +47,25 @@ evaluate it.
 
 ### Usage Examples
 ```scheme
-Scheme> (((lambda (fn) ((lambda (h) (h h)) (lambda (g) (fn (lambda (x) ((g g) x)))))) (lambda (f) (lambda (n) (if (eqv? 0 n) 1 (* n (f (- n 1))))))) 6)
+Scheme> (((lambda (fn) ((lambda (h) (h h)) (lambda (g) (fn (lambda arglist (apply (g g) arglist)))))) (lambda (f) (lambda (n) (if (eqv? 0 n) 1 (* n (f (- n 1))))))) 6)
 720
-Memory used: 47 cells
+Memory used: 59 cells
 ```
 Alternatively, read it from a file in the `demo` folder, using GHCi:
 ```text
 -- Factorial
-*SchemeRepl> repf "demo/factorial.scm" 
+*SchemeRepl> repf "demo/factorial.scm"
 720
 Memory used: 59 cells
 
--- Streams
-*SchemeRepl> repf "demo/streams.scm" 
-(2 . (3 . (5 . (7 . (11 . (13 . (17 . (19 . (23 . (29 . (31 . (37 . (41 . (43 . (47 . (53 . (59 . (61 . (67 . (71 . ()))))))))))))))))))))
+-- Primes via streams
+*SchemeRepl> repf "demo/primes.scm"
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
 Memory used: 6410 cells
 
 -- Mutable state
-*SchemeRepl> repf "demo/counter.scm" 
-(1 . (2 . (3 . (4 . ()))))
+*SchemeRepl> repf "demo/counter.scm"
+(1 2 3 4)
 Memory used: 15 cells
 ```
 ## Scheme AST as a Haskell Datatype

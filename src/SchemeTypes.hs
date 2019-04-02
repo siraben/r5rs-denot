@@ -48,7 +48,7 @@ data E
 
 instance Show E where
   show (Ek con)           = show con
-  show (Ep (car, cdr, _)) = concat ["(", show car, " . ", show cdr, ")"]
+  show (Ep (car, cdr, _)) = concat ["~(", show car, " . ", show cdr, ")"]
   show (Ev (l, _))        = show l
   show (Es (l, _))        = show l
   show (Em m)             = show m
@@ -56,14 +56,16 @@ instance Show E where
 
 showFull :: E -> S -> String
 showFull l s = show' l where
-  show' (Ep (car, cdr, _)) =
-    concat ["(",
-            show' (fst (s !! car)),
-            " . ",
-            show' (fst (s !! cdr)),
-            ")"]
+  show' e@(Ep _) = "(" ++ showPair e s ++ ")"
   show' a = show a
 
+
+showPair (Ek Nil) _ = ""
+showPair (Ep (a, b, _)) s = showFull (fst (s !! a)) s ++
+                          case (fst (s !! b)) of
+                            rest@(Ep _) -> " " ++ showPair rest s
+                            Ek Nil -> ""
+                            val -> " . " ++ showFull val s
 -- Miscellaneous
 data M
   = Boom T

@@ -134,7 +134,7 @@ schemeComment = do
   char ';'
   many (sat (\c -> c /= '\n'))
   return ' '
-  
+
 schemeWhitespace = char ' ' <|> char '\n' <|> char '\t' <|> schemeComment
 
 -- |Parse whitespace.

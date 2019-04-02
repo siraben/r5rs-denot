@@ -182,7 +182,7 @@ makeNumBinop name constructor op =
              (Ek (Number r2)) -> send (constructor (op r1 r2)) k
              a                -> wrong ("non-numeric argument to " ++ name ++ ", got " ++ show a ++ " instead")
          a -> wrong ("non-numeric argument to " ++ name ++ ", got " ++ show a ++ " instead"))
-    
+
 add :: [E] -> K -> C
 add = makeNumBinop "+" (Ek . Number) (+)
 
@@ -200,7 +200,7 @@ eqlig = makeNumBinop ">=" (Ek . Boolean) (>=)
 
 eqlilt :: [E] -> K -> C
 eqlilt = makeNumBinop "<=" (Ek . Boolean) (<=)
-        
+
 mult :: [E] -> K -> C
 mult = makeNumBinop "*" (Ek . Number) (*)
 
@@ -257,7 +257,7 @@ eqv =
          (Ef (a, _), Ef (b, _))       -> retbool (a == b)
          _                            -> retbool False)
 retbool :: Bool -> K -> C
-retbool b = send (Ek (Boolean b))    
+retbool b = send (Ek (Boolean b))
 
 predLift :: (E -> Bool) -> [E] -> K -> C
 predLift p = onearg (\x -> retbool (p x))
