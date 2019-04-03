@@ -1,16 +1,22 @@
 ;; A meta-circular interpreter in Scheme
-;; Adapted from http://lib.store.yahoo.net/lib/paulgraham/jmc.ps
+;; Adapted from http://paulgraham.com/rootsoflisp.html
 
 ((lambda (recursive atom not and cadr caddr caar caddar cadar)
    ((lambda (assoc pair append evcon evlis)
       ((lambda (eval)
-         ;; This program should return the symbol 'a'.
-         (eval '((label firstatom
-                        (lambda (x)
-                          (cond ((atom x) x)
-                                ('t (firstatom (car x))))))
-                 y)
-               '((y ((a b) (c d))))))
+         ;; This program should return the following list:
+         ;; (a m (a m c) d)
+         (eval '((label subst
+                        (lambda (x y z)
+                          (cond ((atom z)
+                                 (cond ((eq z y) x)
+                                       ('t z)))
+                                ('t (cons (subst x y (car z))
+                                          (subst x y (cdr z)))))))
+                 'm
+                 'b
+                 '(a b (a b c) d))
+               '()))
 
        (recursive
         (lambda (eval)

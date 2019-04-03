@@ -270,7 +270,6 @@ reifyImproperList :: [Expr] -> Expr
 reifyImproperList [e, v] = App (Id "cons") [e, v]
 reifyImproperList (e:es) = App (Id "cons") [e,reifyImproperList es]
 
-x = do { schemeExpr  `sepby1` space  }
 schemeQuotedList = do {
   lparen;
   exprs <- schemeQuotable `sepby1` space;
@@ -284,8 +283,6 @@ schemeQuotedList = do {
   rparen;
   return $ reifyImproperList (exprs ++ [last])
   }
-
-
 
 schemeQuotable =
   schemeNum <|> schemeBool <|> schemeNil <|>
