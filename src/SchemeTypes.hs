@@ -64,7 +64,7 @@ showFull l s = show' l
 showPair (Ek Nil) _ = ""
 showPair (Ep (a, b, _)) s =
   showFull (fst (s !! a)) s ++
-  case (fst (s !! b)) of
+  case fst (s !! b) of
     rest@(Ep _) -> " " ++ showPair rest s
     Ek Nil -> ""
     val -> " . " ++ showFull val s
