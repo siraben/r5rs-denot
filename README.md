@@ -30,7 +30,7 @@ Currently, the standard environment contains the following primitive procedures:
 + * - / mod < > = >= <= cons car cdr list eqv? set-car! apply call-with-values call-with-current-continuation call/cc
 ```
 
-And the following special forms:
+And the following core special forms:
 ```text
 (if <expr> <expr> <expr>)
 (if <expr> <expr>)
@@ -39,6 +39,12 @@ And the following special forms:
 (lambda <id> <expr>*)
 (lambda (<id>* . <id>) <expr>*)
 (<expr> <expr>*)
+```
+
+Some derived forms have been implemented:
+```text
+(cond (<expr> <expr>)*)
+(let ((<id> <expr>)*) <expr>*)
 ```
 
 Ensure Cabal is installed and build this project by running `cabal

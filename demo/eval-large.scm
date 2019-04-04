@@ -1,6 +1,8 @@
 ;; A meta-circular interpreter in Scheme
 ;; Adapted from http://paulgraham.com/rootsoflisp.html
 
+;; This program tests the meta-circular interpreter interpreting a
+;; recursive program.
 ((lambda (recursive atom not and cadr caddr caar caddar cadar)
    ((lambda (assoc pair append evcon evlis)
       ((lambda (eval)

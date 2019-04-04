@@ -117,14 +117,10 @@ unsnoc xs = loop [] xs
 
 
 reifyQuotedList :: [Expr] -> Expr
-reifyQuotedList []     = error "cannot reify empty list"
-reifyQuotedList [e]    = App (Id "cons") [e, Const Nil]
-reifyQuotedList (e:es) = App (Id "cons") [e,reifyQuotedList es]
+reifyQuotedList = foldr (\e es -> App (Id "cons") [e,es]) (Const Nil)
 
 reifyImproperList :: [Expr] -> Expr
-reifyImproperList []     = error "cannot reify empty list"
-reifyImproperList [e, v] = App (Id "cons") [e, v]
-reifyImproperList (e:es) = App (Id "cons") [e,reifyImproperList es]
+reifyImproperList = foldr1 (\e es -> App (Id "cons") [e,es])
 
 schemeQuotedList = do {
   lparen;
@@ -182,17 +178,85 @@ schemeIf =
        Nothing -> IfPartial p c
     }
 
+{-
+(define-syntax let
+  (syntax-rules ()
+    ((let ((name val) ...) body1 body2 ...)
+     ((lambda (name ...) body1 body2 ...)
+      val ...))
+    ((let tag ((name val) ...) body1 body2 ...)
+     ((letrec ((tag (lambda (name ...)
+                      body1 body2 ...)))
+        tag)))))
+-}
+
+schemeLetBindings :: Parser [(String, Expr)]
+schemeLetBindings = do
+  lparen
+  r <- many $ do {
+               lparen;
+               n <- tok schemeId;
+               e <- schemeExpr;
+               rparen;
+               return (n,e)
+               }
+  rparen
+  return r
+
+desugarLet :: [(String, Expr)] -> [Expr] -> Expr
+desugarLet bindings bodies = App (Lambda names (butLast bodies) (last bodies)) exps
+  where
+  (names, exps) = unzip bindings
+
+schemeLet = do
+  lparen
+  symb "let"
+  bindings <- schemeLetBindings
+  letBody <- many1 schemeExpr
+  rparen
+  return $ desugarLet bindings letBody
+
+desugarCond :: [(Expr, Expr)] -> Expr
+desugarCond = foldr (\p c -> (uncurry If) p c) (IfPartial (Const (Boolean False)) (Const Nil))
+
+schemeCondBranches :: Parser [(Expr, Expr)]
+schemeCondBranches = do
+  r <- many1 $ do {
+               lparen;
+               p <- tok schemeExpr;
+               e <- schemeExpr;
+               rparen;
+               return (p,e)
+               }
+  return r
+
+schemeCond = do
+  lparen
+  symb "cond"
+  branches <- schemeCondBranches
+  rparen
+  return $ desugarCond branches
+  
 
 schemeIdExpr = Id <$> schemeId
 
-schemeSpecialForm = schemeLambda <||> schemeIf <||> schemeSet <||> schemeApp
+schemeSpecialForm = schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeCond <||> schemeApp
 
 schemeCompoundExpr = try schemeQuoted <|> schemeSpecialForm
 
 schemeExpr = schemeCompoundExpr <|> schemeNum <|>  schemeBool <|> schemeIdExpr
 
+-- Not efficient but we don't spend that much time in parsing.
+butLast = reverse . tail . reverse
 
-parseExpr = space >> schemeExpr
+wrapBegin :: [Expr] -> Expr
+wrapBegin a = App (Lambda [] (butLast a) (last a)) []
+
+parseExpr = do
+  space
+  xs <- schemeExpr `sepEndBy1` space
+  eof
+  return $ wrapBegin xs
 
 -- |Parse a string into a Scheme 'Expr', but return @Nothing@ if there
 -- was unconsumed input.

@@ -80,7 +80,7 @@ extends p (i:is) (a:as) = extends ((i, a) : p) is as
 send :: E -> K -> C
 send e k = k [e]
 
-wrong :: String -> C
+wrong :: X -> C
 wrong a p = (a, Nothing, p)
 
 hold :: L -> K -> C
@@ -91,13 +91,7 @@ single p es
   | length es == 1 = p $ head es
   | otherwise = wrong ("wrong number of return values, expected 1 but got " ++ show (length es))
 
--- new :: S -> Either String L
--- new [] = Left "empty store"
--- new l = case findIndex ((\case
---   Em Undefined -> True
---   _ -> False) . fst) l of
---           Just a  -> Right a
---           Nothing -> Left "out of memory"
+
 new :: S -> L
 new [] = error "empty store"
 -- Because lists are 1-indexed, we ignore the first element.
@@ -143,17 +137,22 @@ permute = id
 unpermute :: [E] -> [E]
 unpermute = id
 
--- |Apply a Scheme procedure to a list of values, passing them as operands.
+-- |Apply a Scheme procedure to a Haskell function that accepts list
+-- of values, passing them as operands to the procedure.
 applicate :: E -> [E] -> K -> C
 applicate (Ef e) es k = snd e es k
 applicate a _ _       = wrong ("failed to apply " ++
                                show a ++
                                ", expected a procedure")
 
-onearg :: (E -> K -> C) -> ([E] -> K -> C)
+-- |Lift a Haskell function that takes one argument into a
+-- Scheme procedure.
+onearg :: (E -> K -> C) -> [E] -> K -> C
 onearg x [e] k = x e k
 onearg _ a _   = wrong ("wrong number of arguments, expected 1 but got " ++ show (length a))
 
+-- |Lift a Haskell function that takes two arguments into a Scheme
+-- procedure.
 twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg x [e1, e2] k = x e1 e2 k
 twoarg _ a _        = wrong ("wrong number of arguments, expected 2 but got " ++ show (length a) ++ ": " ++ show a)
@@ -301,6 +300,16 @@ nullp = predLift p where
   p (Ek Nil) = True
   p _ = False
 
+ycomb :: [E] -> K -> C
+ycomb = onearg $ \h -> applicate h [h]
+
+valueStdExtract (_, Nothing, _) = error "Failed to extract value from expression"
+valueStdExtract (_, Just a, _) = head a
+
+liftExpr = applicate . valueStdExtract . evalStd
+
+-- An example of defining a Scheme procedure given an expression.
+recursive = liftExpr (Lambda ["fn"] [] (App (Lambda ["h"] [] (App (Id "h") [Id "h"])) [Lambda ["g"] [] (App (Id "fn") [LambdaVV "arglist" [] (App (Id "apply") [App (Id "g") [Id "g"],Id "arglist"])])]))
 
 apply :: [E] -> K -> C
 apply =
@@ -394,7 +403,8 @@ builtInOps = [("+", add),
               ("call-with-values", cwv),
               ("values", values),
               ("call-with-current-continuation", cwcc),
-              ("call/cc", cwcc)
+              ("call/cc", cwcc),
+              ("recursive", recursive)
              ]
 
 -- |The list of names of standard operations.

@@ -1,26 +1,27 @@
 module SchemeTypes where
+
 import Data.List
 
--- Locations
+-- |Locations
 type L = Int
 
--- Natural numbers
+-- |Natural numbers
 newtype N =
   N Integer
 
--- Boolean
+-- |Boolean
 type T = Bool
 
--- Symbol
+-- |Symbol
 type Q = String
 
--- Characters
+-- |Characters
 type H = Char
 
--- Numbers
+-- |Numbers
 type R = Integer
 
--- Constants
+-- |Constants
 data Con
   = Symbol Q
   | Boolean T
@@ -30,14 +31,14 @@ data Con
   deriving (Eq)
 
 instance Show Con where
-  show (Symbol q)      = q
-  show (Character h)   = "#\\" ++ [h]
-  show (Number r)      = show r
-  show (Boolean True)  = "#t"
+  show (Symbol q) = q
+  show (Character h) = "#\\" ++ [h]
+  show (Number r) = show r
+  show (Boolean True) = "#t"
   show (Boolean False) = "#f"
-  show Nil             = "()"
+  show Nil = "()"
 
--- Expressed values
+-- |Expressed values
 data E
   = Ek Con
   | Ep (L, L, T)
@@ -47,25 +48,27 @@ data E
   | Ef F
 
 instance Show E where
-  show (Ek con)           = show con
+  show (Ek con) = show con
   show (Ep (car, cdr, _)) = concat ["~(", show car, " . ", show cdr, ")"]
-  show (Ev (l, _))        = show l
-  show (Es (l, _))        = show l
-  show (Em m)             = show m
-  show (Ef f)             = "#<procedure>"
+  show (Ev (l, _)) = show l
+  show (Es (l, _)) = show l
+  show (Em m) = show m
+  show (Ef f) = "#<procedure>"
 
 showFull :: E -> S -> String
-showFull l s = show' l where
-  show' e@(Ep _) = "(" ++ showPair e s ++ ")"
-  show' a = show a
-
+showFull l s = show' l
+  where
+    show' e@(Ep _) = "(" ++ showPair e s ++ ")"
+    show' a = show a
 
 showPair (Ek Nil) _ = ""
-showPair (Ep (a, b, _)) s = showFull (fst (s !! a)) s ++
-                          case (fst (s !! b)) of
-                            rest@(Ep _) -> " " ++ showPair rest s
-                            Ek Nil -> ""
-                            val -> " . " ++ showFull val s
+showPair (Ep (a, b, _)) s =
+  showFull (fst (s !! a)) s ++
+  case (fst (s !! b)) of
+    rest@(Ep _) -> " " ++ showPair rest s
+    Ek Nil -> ""
+    val -> " . " ++ showFull val s
+
 -- Miscellaneous
 data M
   = Boom T
@@ -75,38 +78,37 @@ data M
   deriving (Eq)
 
 instance Show M where
-  show (Boom True)  = "#t"
+  show (Boom True) = "#t"
   show (Boom False) = "#f"
-  show Null         = "null"
-  show Unspecified  = "#<unspecified>"
-  show Undefined    = "#<undefined>"
+  show Null = "null"
+  show Unspecified = "#<unspecified>"
+  show Undefined = "#<undefined>"
 
--- Procedures
+-- |Procedures
 type F = (L, [E] -> K -> C)
 
--- Stores
+-- |Stores
 type S = [(E, T)]
 
--- Environment
+-- |Environment
 type U = [(Ide, L)]
 
--- Command continuation
+-- |Command continuation
 type C = S -> A
 
--- Expression continuation
+-- |Expression continuation
 type K = [E] -> C
 
--- Answer
+-- |Answer
 type A = (String, Maybe [E], S)
 
--- Errors
-newtype X a =
-  X a
+-- |Errors
+type X = String
 
--- Identifier
+-- |Identifiers
 type Ide = String
 
--- Expressions
+-- |Expressions
 data Expr
   = Const Con
   | Id Ide
@@ -129,20 +131,7 @@ data Expr
               Expr
   | Set Ide
         Expr
-
-instance Show Expr where
-  show (Const con) = show con
-  show (Id ide) = ide
-  show (App e1 e2) = concat ["(", show e1, " ", show e2, ")"]
-  show (Lambda l c e) =
-    concat ["(lambda ", show l, " ", show c, " ", show e, ") "]
-  show (LambdaV l i c e) =
-    concat ["(lambda ", show l, " (", i, ") ", show c, " ", show e, ") "]
-  show (LambdaVV i c e) = concat ["(lambda ", i, " ", show c, " ", show e, ") "]
-  show (If p c a) =
-    concat ["(if ", show p, " then ", show c, " else ", show a, ") "]
-  show (IfPartial p c) = concat ["(if ", show p, " then ", show c, ") "]
-  show (Set i e) = concat ["(set! ", i, " ", show e]
+  deriving Show
 
 -- Commands
 type Com = Expr
