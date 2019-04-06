@@ -1,3 +1,9 @@
+{-|
+Module      : SchemeTypes
+Description : Datatypes of r5rs-denot.
+
+As defined in the R5RS standard.
+-}
 module SchemeTypes where
 
 import Data.List
@@ -41,9 +47,9 @@ instance Show Con where
 -- |Expressed values
 data E
   = Ek Con
-  | Ep (L, L, T)
-  | Ev ([L], T)
-  | Es ([L], T)
+  | Ep (L, L, T)  -- pair
+  | Ev ([L], T)   -- vectors
+  | Es ([L], T)   -- strings
   | Em M
   | Ef F
 
@@ -55,12 +61,15 @@ instance Show E where
   show (Em m) = show m
   show (Ef f) = "#<procedure>"
 
+-- |Show an expression, but in full (i.e. follow recursively go down
+-- the @car@ and @cdr@ of the value in the given store.
 showFull :: E -> S -> String
 showFull l s = show' l
   where
     show' e@(Ep _) = "(" ++ showPair e s ++ ")"
     show' a = show a
 
+-- |Given a pair and an environment, show it.
 showPair (Ek Nil) _ = ""
 showPair (Ep (a, b, _)) s =
   showFull (fst (s !! a)) s ++
@@ -69,7 +78,7 @@ showPair (Ep (a, b, _)) s =
     Ek Nil -> ""
     val -> " . " ++ showFull val s
 
--- Miscellaneous
+-- |Miscellaneous values
 data M
   = Boom T
   | Null
@@ -133,5 +142,5 @@ data Expr
         Expr
   deriving Show
 
--- Commands
+-- |Commands
 type Com = Expr

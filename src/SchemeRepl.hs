@@ -1,3 +1,8 @@
+{-|
+Module      : SchemeRepl
+Description : User-visible interface to r5rs-denot Scheme.
+
+-}
 module SchemeRepl where
 
 import SchemeEval
@@ -11,7 +16,7 @@ import System.IO
 reportResult :: A -> IO ()
 reportResult (a, Nothing, s) = putStrLn $ "Error: " ++ a
 reportResult (a, Just e, s) =
-  let memusage = (length s - length builtInOps - 1)
+  let memusage = (length s - length builtInOps - 1 - length exprDefinedOps)
       pluralize s x =
         s ++
         if x > 1 || x == 0
@@ -50,7 +55,7 @@ repf filename = do
   y <- hGetContents x
   reportResult $ reval y
 
--- |Read  and print a file.
+-- |Read and print a file.
 rpf :: String -> IO ()
 rpf filename = do
   x <- openFile filename ReadMode

@@ -2,7 +2,8 @@
 Module      : SchemeParser
 Description : Scheme parser according to R5RS specs.
 
-Uses the ParserCombinator Haskell library.
+Uses the ParserCombinator Haskell library.  Special forms are
+desugared into primitive expressions (@Expr@).
 
 -}
 {-# LANGUAGE LambdaCase #-}
@@ -139,6 +140,7 @@ schemeQuotedList =
 schemeQuotable =
   schemeNum <|> schemeBool <|> schemeNil <||> (Const . Symbol <$> schemeId) <|>
   schemeQuotedList <|> do
+    -- Quoted list within a quoted list.
     x <- schemeQuoted
     return $
       App (Id "cons") [Const (Symbol "quote"), App (Id "cons") [x, Const Nil]]
@@ -203,9 +205,21 @@ schemeLet =
     letBody <- many1 schemeExpr
     return $ desugarLet bindings letBody
 
+desugarLets bindings bodies = foldr (\(n, e) r -> App (Lambda [n] [] r) [e]) (wrapBegin bodies)bindings
+
+schemeLets =
+  parens $ do
+    symb "let*"
+    bindings <- schemeLetBindings
+    letBody <- many1 schemeExpr
+    return $ desugarLets bindings letBody
+
 desugarCond :: [(Expr, Expr)] -> Expr
 desugarCond = foldr (uncurry If) (IfPartial (Const (Boolean False)) (Const Nil))
 
+
+
+-- FIXME: Handle else and =>
 schemeCondBranches :: Parser [(Expr, Expr)]
 schemeCondBranches =
   many1 $
@@ -219,10 +233,11 @@ schemeCond = parens $ symb "cond" >> desugarCond <$> schemeCondBranches
 schemeIdExpr = Id <$> schemeId
 
 schemeSpecialForm =
-  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeCond <||>
+  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||> schemeCond <||>
   schemeApp
 
-schemeCompoundExpr = try schemeQuoted <|> schemeSpecialForm
+schemeCompoundExpr = try schemeQuoted
+                  <|> schemeSpecialForm
 
 schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|> schemeIdExpr
 

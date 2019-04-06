@@ -209,36 +209,47 @@ makeNumBinop name constructor op =
              ("non-numeric argument to " ++
               name ++ ", got " ++ show a ++ " instead"))
 
+-- |Scheme @+@
 add :: [E] -> K -> C
 add = makeNumBinop "+" (Ek . Number) (+)
 
+-- |Scheme @<@
 less :: [E] -> K -> C
 less = makeNumBinop "<" (Ek . Boolean) (<)
 
+-- |Scheme @>@
 more :: [E] -> K -> C
 more = makeNumBinop ">" (Ek . Boolean) (>)
 
+-- |Scheme @=@
 eqli :: [E] -> K -> C
 eqli = makeNumBinop "=" (Ek . Boolean) (==)
 
+-- |Scheme @>=@
 eqlig :: [E] -> K -> C
 eqlig = makeNumBinop ">=" (Ek . Boolean) (>=)
 
+-- |Scheme @<=@
 eqlilt :: [E] -> K -> C
 eqlilt = makeNumBinop "<=" (Ek . Boolean) (<=)
 
+-- |Scheme @*@
 mult :: [E] -> K -> C
 mult = makeNumBinop "*" (Ek . Number) (*)
 
+-- |Scheme @-@
 sub :: [E] -> K -> C
 sub = makeNumBinop "-" (Ek . Number) (-)
 
+-- |Scheme @modulo@
 smod :: [E] -> K -> C
 smod = makeNumBinop "modulo" (Ek . Number) mod
 
+-- |Scheme @div@
 sdiv :: [E] -> K -> C
 sdiv = makeNumBinop "div" (Ek . Number) div
 
+-- |Scheme @car@
 car :: [E] -> K -> C
 car =
   onearg
@@ -246,6 +257,7 @@ car =
        (Ep (a, _, _)) -> hold a
        a -> \_ -> wrong ("non-pair argument to car: " ++ show a))
 
+-- |Scheme @cdr@
 cdr :: [E] -> K -> C
 cdr =
   onearg
@@ -253,6 +265,7 @@ cdr =
        (Ep (_, a, _)) -> hold a
        a -> \_ -> wrong ("non-pair argument to cdr: " ++ show a))
 
+-- |Scheme @set-car!@
 setcar :: [E] -> K -> C
 setcar =
   twoarg
@@ -262,6 +275,7 @@ setcar =
          Ep _ -> wrong "immutable argument to set-car!"
          a -> wrong ("non-pair argument to set-cdr! got " ++ show a))
 
+-- |Scheme @set-car@
 setcdr :: [E] -> K -> C
 setcdr =
   twoarg
@@ -271,6 +285,7 @@ setcdr =
          Ep _ -> wrong "immutable argument to set-cdr!"
          a -> wrong ("non-pair argument to set-cdr! got " ++ show a))
 
+-- |Scheme @eqv?@
 eqv :: [E] -> K -> C
 eqv =
   twoarg
@@ -289,36 +304,42 @@ retbool b = send (Ek (Boolean b))
 predLift :: (E -> Bool) -> [E] -> K -> C
 predLift p = onearg (retbool . p)
 
+-- |Scheme @number?@
 numberp :: [E] -> K -> C
 numberp = predLift p
   where
     p (Ek (Number _)) = True
     p _ = False
 
+-- |Scheme @boolean?@
 booleanp :: [E] -> K -> C
 booleanp = predLift p
   where
     p (Ek (Boolean _)) = True
     p _ = False
 
+-- |Scheme @symbol?@
 symbolp :: [E] -> K -> C
 symbolp = predLift p
   where
     p (Ek (Symbol _)) = True
     p _ = False
 
+-- |Scheme @procedure?@
 procedurep :: [E] -> K -> C
 procedurep = predLift p
   where
     p (Ef _) = True
     p _ = False
 
+-- |Scheme @pair?@
 pairp :: [E] -> K -> C
 pairp = predLift p
   where
     p (Ep _) = True
     p _ = False
 
+-- |Scheme @null?@
 nullp :: [E] -> K -> C
 nullp = predLift p
   where
@@ -354,6 +375,7 @@ recursive =
                  ])
           ]))
 
+-- |Scheme @apply@
 apply :: [E] -> K -> C
 apply =
   twoarg
@@ -378,7 +400,7 @@ tievals :: ([L] -> C) -> [E] -> C
 tievals f [] s = f [] s
 tievals f (e:es) s = tievals (\as -> f (new s : as)) es (update (new s) e s)
 
--- Call with current continuation
+-- |Scheme @call-with-current-continuation@
 cwcc :: [E] -> K -> C
 cwcc =
   onearg
@@ -419,6 +441,7 @@ evalStd prog = eval prog stdEnv idKCont stdStore
 stdEnv :: U
 stdEnv = zip stdEnvNames [1 ..]
 
+exprDefinedOps = [("recursive", recursive)]
 -- |The list of built-in operations.
 builtInOps =
   [ ("+", add)
@@ -450,7 +473,7 @@ builtInOps =
   , ("call-with-current-continuation", cwcc)
   , ("call/cc", cwcc)
   , ("recursive", recursive)
-  ]
+  ] ++ exprDefinedOps
 
 -- |The list of names of standard operations.
 stdEnvNames :: [String]

@@ -20,6 +20,6 @@ executable r5rs-denot
   main-is:             Main.hs
   other-modules:       SchemeRepl, SchemeEval, SchemeParser, SchemeTypes
   -- other-extensions:
-  build-depends:       base, parsec
+  build-depends:       base, parsec, containers
   hs-source-dirs:      src
   default-language:    Haskell2010

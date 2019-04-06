@@ -1,3 +1,3 @@
-(cond ((eqv? 0 0) 'foo)
-      (#f 'nothing)
-      (#t 'hello))
+(cond ((eqv? 1 0) 'first)
+      (#f 'second)
+      (else 'third))
