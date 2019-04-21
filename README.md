@@ -27,7 +27,10 @@ eval (Lambda is gs e0) p k =
 
 Currently, the standard environment contains the following primitive procedures:
 ```text
-+ * - / mod < > = >= <= cons car cdr list eqv? set-car! apply call-with-values call-with-current-continuation call/cc
++ * - / modulo < > = >= <= cons car cdr list eqv? boolean? symbol?
+procedure? pair? number? set-car! set-cdr! null? apply
+call-with-values values call-with-current-continuation call/cc
+recursive
 ```
 
 And the following core special forms:
@@ -53,24 +56,24 @@ evaluate it.
 
 ### Usage Examples
 ```scheme
-Scheme> (((lambda (fn) ((lambda (h) (h h)) (lambda (g) (fn (lambda arglist (apply (g g) arglist)))))) (lambda (f) (lambda (n) (if (eqv? 0 n) 1 (* n (f (- n 1))))))) 6)
+Scheme> (let* ((fact (recursive (lambda (fact) (lambda (n) (if (eqv? 0 n) 1 (* n (fact (- n 1))))))))) (fact 6))
 720
-Memory used: 59 cells
+Memory used: 61 cells
 ```
 Alternatively, read it from a file in the `demo` folder, using GHCi:
 ```text
 -- Factorial
-*SchemeRepl> repf "demo/factorial.scm"
+SchemeRepl> repf "demo/factorial.scm"
 720
 Memory used: 59 cells
 
 -- Primes via streams
-*SchemeRepl> repf "demo/primes.scm"
+SchemeRepl> repf "demo/primes.scm"
 (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
 Memory used: 6410 cells
 
 -- Mutable state
-*SchemeRepl> repf "demo/counter.scm"
+SchemeRepl> repf "demo/counter.scm"
 (1 2 3 4)
 Memory used: 15 cells
 ```
@@ -91,3 +94,24 @@ evalStd prog
 The result is a triple `(String, [E], S)`, consisting of a string, a
 list of results, and the final store (up to the first empty cell).
 
+## Performance notes
+The main drawback to performance is the fact that the store is
+implemented with lists, which has O(n) time for operations such as
+lookups etc.  We could have used Haskell's arrays or sequences instead,
+but at the cost of being finite (and potentially requiring an
+implementation of GC).
+
+The goal is _not_ to have a super fast Scheme interpreter but rather
+serve as a fun exercise and challenge.
+### Performance Statistics
+```text
+SchemeRepl> :set +s
+SchemeRepl> repf "demo/primes.scm" 
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
+Memory used: 6410 cells
+(19.13 secs, 7,926,912,888 bytes)
+SchemeRepl> repf "demo/counter.scm" 
+(1 2 3 4)
+Memory used: 15 cells
+(0.01 secs, 2,506,680 bytes)
+```

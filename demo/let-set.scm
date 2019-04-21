@@ -1,0 +1,5 @@
+(let ((a 0) (b 0) (c 0))
+  (set! b 1)
+  (set! a 2)
+  (set! c 3)
+  (list a b c))

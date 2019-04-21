@@ -16,7 +16,7 @@ import System.IO
 reportResult :: A -> IO ()
 reportResult (a, Nothing, s) = putStrLn $ "Error: " ++ a
 reportResult (a, Just e, s) =
-  let memusage = (length s - length builtInOps - 1 - length exprDefinedOps)
+  let memusage = (length s - length builtInOps - length exprDefinedOps - 1)
       pluralize s x =
         s ++
         if x > 1 || x == 0

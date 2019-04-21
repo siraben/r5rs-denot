@@ -472,7 +472,6 @@ builtInOps =
   , ("values", values)
   , ("call-with-current-continuation", cwcc)
   , ("call/cc", cwcc)
-  , ("recursive", recursive)
   ] ++ exprDefinedOps
 
 -- |The list of names of standard operations.
