@@ -47,9 +47,9 @@ instance Show Con where
 -- |Expressed values
 data E
   = Ek Con
-  | Ep (L, L, T)  -- pair
-  | Ev ([L], T)   -- vectors
-  | Es ([L], T)   -- strings
+  | Ep (L, L, T) -- pair
+  | Ev ([L], T) -- vectors
+  | Es ([L], T) -- strings
   | Em M
   | Ef F
 
@@ -140,7 +140,7 @@ data Expr
               Expr
   | Set Ide
         Expr
-  deriving Show
+  deriving (Show)
 
 -- |Commands
 type Com = Expr

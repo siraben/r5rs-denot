@@ -11,7 +11,6 @@ desugared into primitive expressions (@Expr@).
 module SchemeParser where
 
 import Data.Char
-import SchemeEval
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
 
@@ -139,8 +138,9 @@ schemeQuotedList =
 
 schemeQuotable =
   schemeNum <|> schemeBool <|> schemeNil <||> (Const . Symbol <$> schemeId) <|>
-  schemeQuotedList <|> do
+  schemeQuotedList <|>
     -- Quoted list within a quoted list.
+   do
     x <- schemeQuoted
     return $
       App (Id "cons") [Const (Symbol "quote"), App (Id "cons") [x, Const Nil]]
@@ -205,7 +205,8 @@ schemeLet =
     letBody <- many1 schemeExpr
     return $ desugarLet bindings letBody
 
-desugarLets bindings bodies = foldr (\(n, e) r -> App (Lambda [n] [] r) [e]) (wrapBegin bodies)bindings
+desugarLets bindings bodies =
+  foldr (\(n, e) r -> App (Lambda [n] [] r) [e]) (wrapBegin bodies) bindings
 
 schemeLets =
   parens $ do
@@ -216,8 +217,6 @@ schemeLets =
 
 desugarCond :: [(Expr, Expr)] -> Expr
 desugarCond = foldr (uncurry If) (IfPartial (Const (Boolean False)) (Const Nil))
-
-
 
 -- FIXME: Handle else and =>
 schemeCondBranches :: Parser [(Expr, Expr)]
@@ -233,11 +232,11 @@ schemeCond = parens $ symb "cond" >> desugarCond <$> schemeCondBranches
 schemeIdExpr = Id <$> schemeId
 
 schemeSpecialForm =
-  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||> schemeCond <||>
+  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||>
+  schemeCond <||>
   schemeApp
 
-schemeCompoundExpr = try schemeQuoted
-                  <|> schemeSpecialForm
+schemeCompoundExpr = try schemeQuoted <|> schemeSpecialForm
 
 schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|> schemeIdExpr
 
@@ -254,10 +253,3 @@ parseExpr = do
 -- was unconsumed input.
 readExpr :: String -> Either ParseError Expr
 readExpr = parse parseExpr ""
-
--- |Parse and evaluate a string.
-reval :: String -> A
-reval s =
-  case parse parseExpr "" s of
-    Right res -> evalStd res
-    Left err -> ("Error: " ++ show err, Nothing, emptyStore)

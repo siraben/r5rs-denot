@@ -1,6 +1,7 @@
 module SchemeTests where
-import SchemeTypes
+
 import SchemeEval
+import SchemeTypes
 
 sId = Lambda ["x"] [] (Id "x")
 
@@ -66,7 +67,6 @@ yComb =
               [Lambda ["x"] [] (App (App (Id "g") [Id "g"]) [Id "x"])])
        ])
 
-
 {--
 Factorial with the Y-combinator
 (((lambda (fn)
@@ -82,15 +82,28 @@ Factorial with the Y-combinator
 --}
 factYComb =
   App
-    (Lambda ["m"] []
-      (App (App yComb
-            [Lambda ["f"] []
-             (Lambda ["n"] []
-              (If (App (Id "eqv?") [Id "n", Const (Number 0)])
-                  (Const (Number 1))
-                  (App (Id "*")
-                       [Id "n",
-                       App (Id "f")
-                       [App (Id "-") [Id "n", Const (Number 1)]]])))])
+    (Lambda
+       ["m"]
+       []
+       (App
+          (App
+             yComb
+             [ Lambda
+                 ["f"]
+                 []
+                 (Lambda
+                    ["n"]
+                    []
+                    (If
+                       (App (Id "eqv?") [Id "n", Const (Number 0)])
+                       (Const (Number 1))
+                       (App
+                          (Id "*")
+                          [ Id "n"
+                          , App
+                              (Id "f")
+                              [App (Id "-") [Id "n", Const (Number 1)]]
+                          ])))
+             ])
           [Id "m"]))
     [Const (Number 6)]

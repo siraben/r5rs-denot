@@ -4,7 +4,9 @@ module SchemeEval where
 
 import Data.List
 import Data.Maybe
+import SchemeParser
 import SchemeTypes
+import Text.ParserCombinators.Parsec hiding (space)
 
 eval :: Expr -> U -> K -> C
 eval (Const a) p k = send (Ek a) k
@@ -299,7 +301,7 @@ eqv =
          _ -> retbool False)
 
 retbool :: Bool -> K -> C
-retbool b = send (Ek (Boolean b))
+retbool = send . Ek . Boolean
 
 predLift :: (E -> Bool) -> [E] -> K -> C
 predLift p = onearg (retbool . p)
@@ -346,16 +348,29 @@ nullp = predLift p
     p (Ek Nil) = True
     p _ = False
 
-ycomb :: [E] -> K -> C
-ycomb = onearg $ \h -> applicate h [h]
-
 valueStdExtract (_, Nothing, _) =
   error "Failed to extract value from expression"
 valueStdExtract (_, Just a, _) = head a
 
 liftExpr = applicate . valueStdExtract . evalStd
 
--- An example of defining a Scheme procedure given an expression.
+liftString = liftExpr . rparse
+
+-- |Parse and evaluate a string.
+reval :: String -> A
+reval s =
+  case parse parseExpr "" s of
+    Right res -> evalStd res
+    Left err -> ("Error: " ++ show err, Nothing, emptyStore)
+
+-- |Parse a string into an expression.
+rparse :: String -> Expr
+rparse s =
+  case parse parseExpr "" s of
+    Right res -> res
+    Left _ -> error ("Failed to parse" ++ s)
+
+-- |An example of defining a Scheme procedure given an expression.
 recursive =
   liftExpr
     (Lambda
@@ -442,6 +457,7 @@ stdEnv :: U
 stdEnv = zip stdEnvNames [1 ..]
 
 exprDefinedOps = [("recursive", recursive)]
+
 -- |The list of built-in operations.
 builtInOps =
   [ ("+", add)
@@ -472,7 +488,8 @@ builtInOps =
   , ("values", values)
   , ("call-with-current-continuation", cwcc)
   , ("call/cc", cwcc)
-  ] ++ exprDefinedOps
+  ] ++
+  exprDefinedOps
 
 -- |The list of names of standard operations.
 stdEnvNames :: [String]
