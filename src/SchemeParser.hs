@@ -17,16 +17,9 @@ import Text.ParserCombinators.Parsec hiding (space)
 a <||> b = try a <|> b
 
 -- |Transforms a parser into one that also consumes trailing whitespace.
-tok p = do
-  x <- p
-  space
-  return x
+tok p = p <* space
 
-parens p = do
-  lparen
-  x <- p
-  rparen
-  return x
+parens p = lparen >> p <* rparen
 
 eol = char '\n'
 
@@ -59,10 +52,7 @@ schemeNum = Const . Number <$> negnat <||> natural
 constLit k c = k >> return c
 
 -- |Parse a boolean.
-schemeBool = do
-  char '#'
-  (string "t" >> return (Const (Boolean True))) <|>
-    (string "f" >> return (Const (Boolean False)))
+schemeBool = (char '#') >> ((string "t" >> return (Const (Boolean True))) <|> (string "f" >> return (Const (Boolean False))))
 
 initp x = x `elem` concat [['a' .. 'z'], ['A' .. 'Z'], "!$%&*/:<=>?_~"]
 
@@ -109,8 +99,8 @@ schemeLambda =
     return $
       let (cmds, expr) = unsnoc exprs
        in case fs of
-            (args, Nothing) -> Lambda args cmds expr
-            ([], Just name) -> LambdaVV name cmds expr
+            (args, Nothing)   -> Lambda args cmds expr
+            ([], Just name)   -> LambdaVV name cmds expr
             (args, Just rest) -> LambdaV args rest cmds expr
 
 unsnoc xs = loop [] xs
@@ -134,7 +124,7 @@ schemeQuotedList =
     return $
       case last of
         Nothing -> reifyQuotedList exprs
-        Just a -> reifyImproperList (exprs ++ [a])
+        Just a  -> reifyImproperList (exprs ++ [a])
 
 schemeQuotable =
   schemeNum <|> schemeBool <|> schemeNil <||> (Const . Symbol <$> schemeId) <|>
@@ -170,7 +160,7 @@ schemeIf =
     a <- optionMaybe schemeExpr
     return $
       case a of
-        Just a -> If p c a
+        Just a  -> If p c a
         Nothing -> IfPartial p c
 
 {-
@@ -202,18 +192,34 @@ schemeLet =
   parens $ do
     symb "let"
     bindings <- schemeLetBindings
-    letBody <- many1 schemeExpr
-    return $ desugarLet bindings letBody
+    desugarLet bindings <$> many1 schemeExpr
 
 desugarLets bindings bodies =
   foldr (\(n, e) r -> App (Lambda [n] [] r) [e]) (wrapBegin bodies) bindings
+
+schemeLetrecBinding :: Parser (String, Expr)
+schemeLetrecBinding =
+  parens $
+  parens $
+  do
+    n <- tok schemeId
+    e <- schemeExpr
+    return (n, e)
 
 schemeLets =
   parens $ do
     symb "let*"
     bindings <- schemeLetBindings
-    letBody <- many1 schemeExpr
-    return $ desugarLets bindings letBody
+    desugarLets bindings <$> many1 schemeExpr
+
+schemeLetrec =
+  parens $ do
+    symb "letrec"
+    binding <- schemeLetrecBinding
+    let fname = fst binding
+        fbody = snd binding
+      in
+        desugarLet [(fname, App (Id "recursive") [Lambda [fname] [] fbody])] <$> many1 schemeExpr
 
 desugarCond :: [(Expr, Expr)] -> Expr
 desugarCond = foldr (uncurry If) (IfPartial (Const (Boolean False)) (Const Nil))
@@ -232,7 +238,7 @@ schemeCond = parens $ symb "cond" >> desugarCond <$> schemeCondBranches
 schemeIdExpr = Id <$> schemeId
 
 schemeSpecialForm =
-  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||>
+  schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||> schemeLetrec <||>
   schemeCond <||>
   schemeApp
 
@@ -243,11 +249,7 @@ schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|> schemeIdExpr
 wrapBegin :: [Expr] -> Expr
 wrapBegin a = App (Lambda [] (init a) (last a)) []
 
-parseExpr = do
-  space
-  xs <- schemeExpr `sepEndBy1` space
-  eof
-  return $ wrapBegin xs
+parseExpr = wrapBegin <$> (space >> schemeExpr `sepEndBy1` space <* eof)
 
 -- |Parse a string into a Scheme 'Expr', but return @Nothing@ if there
 -- was unconsumed input.

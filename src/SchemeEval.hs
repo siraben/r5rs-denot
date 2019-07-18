@@ -74,7 +74,7 @@ evals [] _ k = k []
 evals (e0:es) p k = eval e0 p $ single $ \e0 -> evals es p $ \es -> k (e0 : es)
 
 evalc :: [Expr] -> U -> C -> C
-evalc [] p t = t
+evalc [] p t      = t
 evalc (g0:gs) p t = eval g0 p $ \es -> evalc gs p t
 
 envLookup :: U -> Ide -> L
@@ -84,7 +84,7 @@ envLookup ((a, b):as) p
   | otherwise = envLookup as p
 
 extends :: U -> [Ide] -> [L] -> U
-extends p [] _ = p
+extends p [] _          = p
 extends p (i:is) (a:as) = extends ((i, a) : p) is as
 
 send :: E -> K -> C
@@ -135,7 +135,7 @@ assign a e t s = t $ update a e s
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
-truish _ = True
+truish _                    = True
 
 -- |Permute an expression list (as the order of evaluation of
 -- arguments is undefined in Scheme).  Must be an inverse operation to
@@ -174,7 +174,7 @@ twoarg _ a _ =
 -- |Scheme @list@, also an example of how Scheme procedures can be
 -- defined from other ones, but written in CPS.
 list :: [E] -> K -> C
-list [] k = send (Ek Nil) k
+list [] k     = send (Ek Nil) k
 list (x:xs) k = list xs $ single $ \e -> cons [x, e] k
 
 -- |Scheme @cons@.
@@ -293,12 +293,12 @@ eqv =
   twoarg
     (\e1 e2 ->
        case (e1, e2) of
-         (Ek a, Ek b) -> retbool (a == b)
-         (Em a, Em b) -> retbool (a == b)
-         (Ev a, Ev b) -> retbool (a == b)
+         (Ek a, Ek b)                 -> retbool (a == b)
+         (Em a, Em b)                 -> retbool (a == b)
+         (Ev a, Ev b)                 -> retbool (a == b)
          (Ep (a, x, _), Ep (b, y, _)) -> retbool ((a == b) && (x == y))
-         (Ef (a, _), Ef (b, _)) -> retbool (a == b)
-         _ -> retbool False)
+         (Ef (a, _), Ef (b, _))       -> retbool (a == b)
+         _                            -> retbool False)
 
 retbool :: Bool -> K -> C
 retbool = send . Ek . Boolean
@@ -311,42 +311,42 @@ numberp :: [E] -> K -> C
 numberp = predLift p
   where
     p (Ek (Number _)) = True
-    p _ = False
+    p _               = False
 
 -- |Scheme @boolean?@
 booleanp :: [E] -> K -> C
 booleanp = predLift p
   where
     p (Ek (Boolean _)) = True
-    p _ = False
+    p _                = False
 
 -- |Scheme @symbol?@
 symbolp :: [E] -> K -> C
 symbolp = predLift p
   where
     p (Ek (Symbol _)) = True
-    p _ = False
+    p _               = False
 
 -- |Scheme @procedure?@
 procedurep :: [E] -> K -> C
 procedurep = predLift p
   where
     p (Ef _) = True
-    p _ = False
+    p _      = False
 
 -- |Scheme @pair?@
 pairp :: [E] -> K -> C
 pairp = predLift p
   where
     p (Ep _) = True
-    p _ = False
+    p _      = False
 
 -- |Scheme @null?@
 nullp :: [E] -> K -> C
 nullp = predLift p
   where
     p (Ek Nil) = True
-    p _ = False
+    p _        = False
 
 valueStdExtract (_, Nothing, _) =
   error "Failed to extract value from expression"
@@ -361,14 +361,14 @@ reval :: String -> A
 reval s =
   case parse parseExpr "" s of
     Right res -> evalStd res
-    Left err -> ("Error: " ++ show err, Nothing, emptyStore)
+    Left err  -> ("Error: " ++ show err, Nothing, emptyStore)
 
 -- |Parse a string into an expression.
 rparse :: String -> Expr
 rparse s =
   case parse parseExpr "" s of
     Right res -> res
-    Left _ -> error ("Failed to parse" ++ s)
+    Left _    -> error ("Failed to parse" ++ s)
 
 -- |An example of defining a Scheme procedure given an expression.
 recursive =
@@ -397,7 +397,7 @@ apply =
     (\e1 e2 k ->
        case e1 of
          Ef f -> valueslist [e2] (\es -> applicate e1 es k)
-         a -> wrong ("bad procedure argument to apply, got " ++ show a))
+         a    -> wrong ("bad procedure argument to apply, got " ++ show a))
 
 valueslist :: [E] -> K -> C
 valueslist =
@@ -412,7 +412,7 @@ valueslist =
          a -> wrong ("non-list argument to values-list, got " ++ show a))
 
 tievals :: ([L] -> C) -> [E] -> C
-tievals f [] s = f [] s
+tievals f [] s     = f [] s
 tievals f (e:es) s = tievals (\as -> f (new s : as)) es (update (new s) e s)
 
 -- |Scheme @call-with-current-continuation@
