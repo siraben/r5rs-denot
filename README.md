@@ -48,6 +48,7 @@ Some derived forms have been implemented:
 ```text
 (cond (<expr> <expr>)*)
 (let ((<id> <expr>)*) <expr>*)
+(letrec ((<id> <expr>)) <expr>*)
 ```
 
 Ensure Cabal is installed and build this project by running `cabal
@@ -56,9 +57,9 @@ evaluate it.
 
 ### Usage Examples
 ```scheme
-Scheme> (let* ((fact (recursive (lambda (fact) (lambda (n) (if (eqv? 0 n) 1 (* n (fact (- n 1))))))))) (fact 6))
+Scheme> (letrec ((fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))) (fact 6))
 720
-Memory used: 61 cells
+Memory used: 60 cells
 ```
 Alternatively, read it from a file in the `demo` folder, using GHCi:
 ```text
