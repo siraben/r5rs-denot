@@ -7,6 +7,7 @@ import Data.Maybe
 import SchemeParser
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
+import qualified Data.IntMap as M
 
 eval :: Expr -> U -> K -> C
 eval (Const a) p k = send (Ek a) k
@@ -94,7 +95,7 @@ wrong :: X -> C
 wrong a p = (a, Nothing, p)
 
 hold :: L -> K -> C
-hold a k s = send (fst (s !! a)) k s
+hold a k s = send (fst (s M.! a)) k s
 
 single :: (E -> C) -> K
 single p es
@@ -103,35 +104,21 @@ single p es
     wrong
       ("wrong number of return values, expected 1 but got " ++ show (length es))
 
+-- TODO: fix O(n) time to find next free cell
 new :: S -> L
-new [] = error "empty store"
--- Because lists are 1-indexed, we ignore the first element.
-new (_:l) =
-  1 +
-  fromMaybe
-    (error "out of memory")
-    (findIndex
-       ((\case
-           Em Undefined -> True
-           _ -> False) .
-        fst)
-       l)
+new = M.size
 
 emptyEnv :: U
-emptyEnv = []
+emptyEnv = mempty
 
 emptyStore :: S
-emptyStore = []
-
-replace :: Int -> a -> [a] -> [a]
-replace 0 x (_:as) = x : as
-replace n x (a:as) = a : replace (n - 1) x as
+emptyStore = mempty
 
 update :: L -> E -> S -> S
-update l e = replace l (e, True)
+update l e = M.insert l (e, True)
 
 assign :: L -> E -> C -> C
-assign a e t s = t $ update a e s
+assign a e t s = t (update a e s)
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
@@ -447,7 +434,7 @@ takefirst = take
 
 -- |The "normal" continuation.
 idKCont :: [E] -> S -> A
-idKCont e s = ("", Just e, take (new s) s)
+idKCont e s = ("", Just e, s)
 
 -- |Evaluate an expression with the standard environment and store.
 evalStd prog = eval prog stdEnv idKCont stdStore
@@ -501,12 +488,13 @@ stdOps = map snd builtInOps
 
 -- |The standard prelude.
 stdPrelude :: S
-stdPrelude = (Em Undefined, False) : zipWith makeOpStore [1 ..] stdOps
+stdPrelude = M.fromList ((0,(Em Undefined, False)) : zipWith makeOpStore [1 ..] stdOps)
   where
-    makeOpStore loc op = (Ef (loc, op), True)
+    n = length stdOps + 1
+    makeOpStore loc op = (loc, (Ef (loc, op), True))
 
 -- |The standard store, consisting of a Prelude and infinite space.
 stdStore :: S
-stdStore = stdPrelude ++ infStore
-  where
-    infStore = repeat (Em Undefined, False)
+stdStore = stdPrelude 
+  -- where
+  --   infStore = repeat (Em Undefined, False)

@@ -1,11 +1,11 @@
-# From denotational semantics to a Scheme interpreter written in Haskell
+# An interpreter for Scheme R5RS based on formal semantics
 ![R5RS denotational semantics for evaluating lambdas](lambda-def.png)
 
 The R5RS Scheme specification is a 50-page beauty, outlining the
 syntax and semantics of Scheme in easy to understand prose, and
-concludes with a denotational semantics.  The semantics looks a lot
-like Haskell because in a sense it _is_ Haskell!  We can turn the
-above image into a Haskell code fragment:
+concludes with a formal semantics.  The semantics looks a lot like
+Haskell because in a sense it _is_ Haskell!  We can turn the above
+image into a Haskell code fragment:
 
 ```haskell
 -- Evaluate a lambda expression with an environment, continuation and
@@ -96,23 +96,23 @@ The result is a triple `(String, [E], S)`, consisting of a string, a
 list of results, and the final store (up to the first empty cell).
 
 ## Performance notes
-The main drawback to performance is the fact that the store is
-implemented with lists, which has O(n) time for operations such as
-lookups etc.  We could have used Haskell's arrays or sequences instead,
-but at the cost of being finite (and potentially requiring an
-implementation of GC).
+The performance has been greatly improved due to the use of the
+`Data.IntMap` library to implement the store.  Thus, the Scheme
+interpreter runs reasonably fast.
 
-The goal is _not_ to have a super fast Scheme interpreter but rather
-serve as a fun exercise and challenge.
 ### Performance Statistics
 ```text
 SchemeRepl> :set +s
-SchemeRepl> repf "demo/primes.scm" 
+λ> repf "demo/primes.scm"
 (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
 Memory used: 6410 cells
-(19.13 secs, 7,926,912,888 bytes)
-SchemeRepl> repf "demo/counter.scm" 
+(0.51 secs, 41,561,328 bytes)
+λ> repf "demo/eval-lets.scm"
+a
+Memory used: 848 cells
+(0.04 secs, 27,174,488 bytes)
+λ> repf "demo/counter.scm"
 (1 2 3 4)
 Memory used: 15 cells
-(0.01 secs, 2,506,680 bytes)
+(0.01 secs, 2,233,112 bytes)
 ```

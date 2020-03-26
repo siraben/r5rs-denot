@@ -7,6 +7,7 @@ As defined in the R5RS standard.
 module SchemeTypes where
 
 import Data.List
+import qualified Data.IntMap as M
 
 -- |Locations
 type L = Int
@@ -72,8 +73,8 @@ showFull l s = show' l
 -- |Given a pair and an environment, show it.
 showPair (Ek Nil) _ = ""
 showPair (Ep (a, b, _)) s =
-  showFull (fst (s !! a)) s ++
-  case fst (s !! b) of
+  showFull (fst (s M.! a)) s ++
+  case fst (s M.! b) of
     rest@(Ep _) -> " " ++ showPair rest s
     Ek Nil -> ""
     val -> " . " ++ showFull val s
@@ -97,7 +98,7 @@ instance Show M where
 type F = (L, [E] -> K -> C)
 
 -- |Stores
-type S = [(E, T)]
+type S = M.IntMap (E,T)
 
 -- |Environment
 type U = [(Ide, L)]

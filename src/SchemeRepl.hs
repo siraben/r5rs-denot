@@ -10,13 +10,14 @@ import SchemeParser
 import SchemeTypes
 import System.Exit
 import System.IO
+import qualified Data.IntMap as M
 
 -- |Print the contents of a value of type 'Result' 'Val', or an error
 -- message.
 reportResult :: A -> IO ()
 reportResult (a, Nothing, s) = putStrLn $ "Error: " ++ a
 reportResult (a, Just e, s) =
-  let memusage = (length s - length builtInOps - length exprDefinedOps - 1)
+  let memusage = (M.size s - length builtInOps - length exprDefinedOps - 1)
       pluralize s x =
         s ++
         if x > 1 || x == 0
