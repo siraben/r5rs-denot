@@ -13,17 +13,18 @@ module SchemeParser where
 import Data.Char
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
+import Data.Functor
 
 a <||> b = try a <|> b
 
 -- |Transforms a parser into one that also consumes trailing whitespace.
 tok p = p <* space
 
-parens p = lparen >> p <* rparen
+parens p = lparen *> p <* rparen
 
 eol = char '\n'
 
-schemeComment = char ';' >> many (noneOf "\n") >> eol
+schemeComment = char ';' *> many (noneOf "\n") *> eol
 
 schemeWhitespace = oneOf " \n\t" <|> schemeComment <?> "whitespace"
 
@@ -49,23 +50,21 @@ negnat = string "-" >> (-) 0 <$> natural
 schemeNum = Const . Number <$> negnat <||> natural
 
 -- |Apply a parser, then when it succeeds, return a constant.
-constLit k c = k >> return c
+constLit :: Functor f => f a -> b -> f b
+constLit = ($>)
 
 -- |Parse a boolean.
-schemeBool = (char '#') >> ((string "t" >> return (Const (Boolean True))) <|> (string "f" >> return (Const (Boolean False))))
+schemeBool = (char '#') *> ((string "t" *> return (Const (Boolean True))) <|> (string "f" *> return (Const (Boolean False))))
 
 initp x = x `elem` concat [['a' .. 'z'], ['A' .. 'Z'], "!$%&*/:<=>?_~"]
 
-digitp x = x `elem` ['0' .. '9']
+digitp x = x `elem`  ['0' .. '9']
 
 specialSubseqp x = x `elem` "+-.@"
 
 subseqp c = initp c || digitp c || specialSubseqp c
 
-schemeId =
-  do x <- satisfy initp
-     xs <- many (satisfy subseqp)
-     return (x : xs)
+schemeId = (:) <$> satisfy initp <*> many (satisfy subseqp)
      <|> string "+" <|>
   string "-" <|>
   try (string "...") <?> "identifier"
@@ -140,17 +139,14 @@ schemeQuoteSpecialForm = symb "'" >> schemeQuotable
 schemeQuoted =
   schemeQuoteSpecialForm <|> parens (symb "quote" >> schemeQuotable)
 
-schemeNil = lparen >> rparen >> return (Const Nil)
+schemeNil = lparen *> rparen *> return (Const Nil)
 
 schemeApp = do
   (e:es) <- parens (schemeExpr `sepBy1` space)
   return $ App e es
 
 schemeSet =
-  parens $ do
-    symb "set!"
-    n <- tok schemeId
-    Set n <$> schemeExpr
+  parens (symb "set!" *> (Set <$> tok schemeId <*> schemeExpr))
 
 schemeIf =
   parens $ do
@@ -176,12 +172,7 @@ schemeIf =
 -}
 schemeLetBindings :: Parser [(String, Expr)]
 schemeLetBindings =
-  parens $
-  many $
-  parens $ do
-    n <- tok schemeId
-    e <- schemeExpr
-    return (n, e)
+  parens (many (parens ((,) <$> tok schemeId <*> schemeExpr)))
 
 desugarLet :: [(String, Expr)] -> [Expr] -> Expr
 desugarLet bindings bodies = App (Lambda names (init bodies) (last bodies)) exps
@@ -189,22 +180,14 @@ desugarLet bindings bodies = App (Lambda names (init bodies) (last bodies)) exps
     (names, exps) = unzip bindings
 
 schemeLet =
-  parens $ do
-    symb "let"
-    bindings <- schemeLetBindings
-    desugarLet bindings <$> many1 schemeExpr
+  parens (symb "let" *>
+         (desugarLet <$> schemeLetBindings <*> many1 schemeExpr))
 
 desugarLets bindings bodies =
   foldr (\(n, e) r -> App (Lambda [n] [] r) [e]) (wrapBegin bodies) bindings
 
 schemeLetrecBinding :: Parser (String, Expr)
-schemeLetrecBinding =
-  parens $
-  parens $
-  do
-    n <- tok schemeId
-    e <- schemeExpr
-    return (n, e)
+schemeLetrecBinding = parens (parens ((,) <$> tok schemeId <*> schemeExpr))
 
 schemeLets =
   parens $ do

@@ -39,9 +39,7 @@ repl = do
   hFlush stdout
   done <- isEOF
   if done
-    then do
-      putStrLn "Exiting."
-      exitSuccess
+    then putStrLn "Exiting." *> exitSuccess
     else do
       exp <- getLine
       if exp == ""

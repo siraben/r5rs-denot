@@ -57,7 +57,7 @@ eval (LambdaV is i gs e0) ρ κ =
          , \es κ' ->
              if length es >= length is
                then tievalsrest
-                      ((\p' -> evalc gs p' (eval e0 p' κ')) .
+                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) .
                        extends ρ (is ++ [i]))
                       (length is)
                       es
@@ -158,7 +158,7 @@ twoarg _ χ _ =
 -- defined from other ones, but written in CPS.
 list :: [E] -> K -> C
 list [] κ     = send (Ek Nil) κ
-list (x:xs) κ = list xs $ single $ \e -> cons [x, e] κ
+list (e:es) κ = list es $ single $ \εs -> cons [e, εs] κ
 -- TODO: rewrite with mapM
 
 -- |Scheme @cons@.
@@ -186,14 +186,14 @@ makeNumBinop name constructor op =
          (Ek (Number r1)) ->
            case ε2 of
              (Ek (Number r2)) -> send (constructor (op r1 r2)) κ
-             a ->
+             χ ->
                wrong
                  ("non-numeric argument to " ++
-                  name ++ ", got " ++ show a ++ " instead")
-         a ->
+                  name ++ ", got " ++ show χ ++ " instead")
+         χ ->
            wrong
              ("non-numeric argument to " ++
-              name ++ ", got " ++ show a ++ " instead"))
+              name ++ ", got " ++ show χ ++ " instead"))
 
 -- |Scheme @+@
 add :: [E] -> K -> C
@@ -400,8 +400,8 @@ tievals ϕ [] σ     = ϕ [] σ
 tievals ϕ (ε:εs) σ = tievals (\αs -> ϕ (new σ : αs)) εs (update (new σ) ε σ)
 
 -- |Scheme @call-with-current-continuation@
-cwcc :: [E] -> K -> C
-cwcc =
+callcc :: [E] -> K -> C
+callcc =
   onearg
     (\ε κ ->
        case ε of
@@ -409,7 +409,7 @@ cwcc =
            \σ ->
              applicate
                ε
-               [Ef (new σ, \εs k' -> κ εs)]
+               [Ef (new σ, \εs κ' -> κ εs)]
                κ
                (update (new σ) (Em Unspecified) σ)
          _ -> wrong ("bad procedure argument, got " ++ show ε))
@@ -470,8 +470,8 @@ builtInOps =
   , ("apply", apply)
   , ("call-with-values", cwv)
   , ("values", values)
-  , ("call-with-current-continuation", cwcc)
-  , ("call/cc", cwcc)
+  , ("call-with-current-continuation", callcc)
+  , ("call/cc", callcc)
   ] ++
   exprDefinedOps
 
