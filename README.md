@@ -1,4 +1,4 @@
-# An interpreter for Scheme R5RS based on formal semantics
+# An interpreter for R5RS Scheme based on formal semantics
 ![R5RS denotational semantics for evaluating lambdas](lambda-def.png)
 
 The R5RS Scheme specification is a 50-page beauty, outlining the
@@ -10,19 +10,19 @@ image into a Haskell code fragment:
 ```haskell
 -- Evaluate a lambda expression with an environment, continuation and
 -- store.
-eval (Lambda is gs e0) p k =
-  \s ->
+eval (Lambda is gs e0) ρ k =
+  \σ ->
     send
       (Ef
-         ( new s
+         ( new σ
          , \es k' ->
              if length es == length is
                then tievals
-                      ((\p' -> evalc gs p' (eval e0 p' k')) . extends p is)
+                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' k')) . extends ρ is)
                       es
                else wrong "wrong number of arguments"))
       k
-      (update (new s) (Em Unspecified) s)
+      (update (new σ) (Em Unspecified) σ)
 ```
 
 Currently, the standard environment contains the following primitive procedures:
