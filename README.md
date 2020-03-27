@@ -10,18 +10,18 @@ image into a Haskell code fragment:
 ```haskell
 -- Evaluate a lambda expression with an environment, continuation and
 -- store.
-eval (Lambda is gs e0) ρ k =
+eval (Lambda is gs e0) ρ κ =
   \σ ->
     send
       (Ef
          ( new σ
-         , \es k' ->
-             if length es == length is
+         , \εs κ' ->
+             if length εs == length is
                then tievals
-                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' k')) . extends ρ is)
-                      es
+                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) . extends ρ is)
+                      εs
                else wrong "wrong number of arguments"))
-      k
+      κ
       (update (new σ) (Em Unspecified) σ)
 ```
 
