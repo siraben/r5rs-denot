@@ -91,7 +91,7 @@ wrong :: X -> C
 wrong χ ρ = (χ, Nothing, ρ)
 
 hold :: L -> K -> C
-hold α κ σ = send (fst (σ M.! α)) κ σ
+hold α κ σ@(c, m) = send (fst (m M.! α)) κ σ
 
 single :: (E -> C) -> K
 single ϕ es
@@ -100,18 +100,17 @@ single ϕ es
     wrong
       ("wrong number of return values, expected 1 but got " ++ show (length es))
 
--- TODO: fix O(n) time to find next free cell
 new :: S -> L
-new = M.size
+new (c, _) = c + 1
 
 emptyEnv :: U
 emptyEnv = mempty
 
 emptyStore :: S
-emptyStore = mempty
+emptyStore = (0, mempty)
 
 update :: L -> E -> S -> S
-update α ε σ = M.insert α (ε, True) σ
+update α ε (c, σ) = (max α c, M.insert α (ε, True) σ)
 
 assign :: L -> E -> C -> C
 assign α ε θ σ = θ (update α ε σ)
@@ -485,7 +484,7 @@ stdOps = map snd builtInOps
 
 -- |The standard prelude.
 stdPrelude :: S
-stdPrelude = M.fromList ((0,(Em Undefined, False)) : zipWith makeOpStore [1 ..] stdOps)
+stdPrelude = (n, M.fromList ((0,(Em Undefined, False)) : zipWith makeOpStore [1 ..] stdOps))
   where
     n = length stdOps + 1
     makeOpStore loc op = (loc, (Ef (loc, op), True))

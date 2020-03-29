@@ -72,9 +72,9 @@ showFull l s = show' l
 
 -- |Given a pair and an environment, show it.
 showPair (Ek Nil) _ = ""
-showPair (Ep (a, b, _)) s =
-  showFull (fst (s M.! a)) s ++
-  case fst (s M.! b) of
+showPair (Ep (a, b, _)) s@(_, m) =
+  showFull (fst (m M.! a)) s ++
+  case fst (m M.! b) of
     rest@(Ep _) -> " " ++ showPair rest s
     Ek Nil -> ""
     val -> " . " ++ showFull val s
@@ -98,7 +98,7 @@ instance Show M where
 type F = (L, [E] -> K -> C)
 
 -- |Stores
-type S = M.IntMap (E,T)
+type S = (Int, M.IntMap (E,T))
 
 -- |Environment
 type U = [(Ide, L)]

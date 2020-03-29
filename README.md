@@ -103,16 +103,16 @@ interpreter runs reasonably fast.
 ### Performance Statistics
 ```text
 SchemeRepl> :set +s
-λ> repf "demo/primes.scm"
+SchemeRepl> repf "demo/primes.scm"
 (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
 Memory used: 6410 cells
-(0.51 secs, 41,561,328 bytes)
-λ> repf "demo/eval-lets.scm"
+(0.09 secs, 40,075,816 bytes)
+SchemeRepl> repf "demo/eval-lets.scm"
 a
 Memory used: 848 cells
-(0.04 secs, 27,174,488 bytes)
-λ> repf "demo/counter.scm"
+(0.03 secs, 26,300,920 bytes)
+SchemeRepl> repf "demo/counter.scm"
 (1 2 3 4)
 Memory used: 15 cells
-(0.01 secs, 2,233,112 bytes)
+(0.01 secs, 2,253,408 bytes)
 ```

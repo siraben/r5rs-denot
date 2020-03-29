@@ -17,7 +17,7 @@ import qualified Data.IntMap as M
 reportResult :: A -> IO ()
 reportResult (a, Nothing, s) = putStrLn $ "Error: " ++ a
 reportResult (a, Just e, s) =
-  let memusage = (M.size s - length builtInOps - length exprDefinedOps - 1)
+  let memusage = (new s - length builtInOps - length exprDefinedOps - 2)
       pluralize s x =
         s ++
         if x > 1 || x == 0
