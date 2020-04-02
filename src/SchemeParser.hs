@@ -102,6 +102,11 @@ schemeLambda =
             ([], Just name)   -> LambdaVV name cmds expr
             (args, Just rest) -> LambdaV args rest cmds expr
 
+schemeBegin =
+  parens $ do
+    symb "begin"
+    wrapBegin <$> schemeExpr `sepBy1` space
+
 unsnoc xs = loop [] xs
   where
     loop hs =
@@ -126,13 +131,20 @@ schemeQuotedList =
         Just a  -> reifyImproperList (exprs ++ [a])
 
 schemeQuotable =
-  schemeNum <|> schemeBool <|> schemeNil <||> (Const . Symbol <$> schemeId) <|>
+  schemeNum <|> schemeBool <|> schemeNil <||> schemeString <||>
+  (Const . Symbol <$> schemeId) <|>
   schemeQuotedList <|>
     -- Quoted list within a quoted list.
    do
     x <- schemeQuoted
     return $
       App (Id "cons") [Const (Symbol "quote"), App (Id "cons") [x, Const Nil]]
+
+
+schemeString = do char '"'
+                  s <- many (satisfy (/= '"'))
+                  tok (char '"')
+                  pure (Const (String s))
 
 schemeQuoteSpecialForm = symb "'" >> schemeQuotable
 
@@ -218,16 +230,34 @@ schemeCondBranches =
 
 schemeCond = parens $ symb "cond" >> desugarCond <$> schemeCondBranches
 
-schemeIdExpr = Id <$> schemeId
+schemeAnd = 
+  parens $ do
+    symb "and"
+    exprs <- schemeExpr `sepBy` space
+    pure (foldr (\e es -> If e es (Const (Boolean False)))
+                (Const (Boolean True)) exprs)
 
-schemeSpecialForm =
+-- Danger!  We're writing unhygienic macros!
+schemeOr = 
+  parens $ do
+    symb "or"
+    exprs <- schemeExpr `sepBy` space
+    pure (foldr g (Const (Boolean False)) exprs)
+  where
+    g e es = let name = ('"':show e)
+             in App (Lambda [name] [] (If (Id name)
+                                          (Id name)
+                                          es))
+                    [e]
+schemeSpecialForm = schemeBegin <||> schemeAnd <||> schemeOr <||>
   schemeLambda <||> schemeIf <||> schemeSet <||> schemeLet <||> schemeLets <||> schemeLetrec <||>
   schemeCond <||>
   schemeApp
 
 schemeCompoundExpr = try schemeQuoted <|> schemeSpecialForm
 
-schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|> schemeIdExpr
+schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|>
+             (Id <$> schemeId) <|> schemeString
 
 wrapBegin :: [Expr] -> Expr
 wrapBegin a = App (Lambda [] (init a) (last a)) []

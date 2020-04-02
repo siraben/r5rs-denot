@@ -28,9 +28,13 @@ type H = Char
 -- |Numbers
 type R = Integer
 
+-- |Strings
+type Str = String
+
 -- |Constants
 data Con
   = Symbol Q
+  | String Str
   | Boolean T
   | Number R
   | Character H
@@ -39,7 +43,8 @@ data Con
 
 instance Show Con where
   show (Symbol q) = q
-  show (Character h) = "#\\" ++ [h]
+  show (String s) = show s
+  show (Character h) = "#\\" <> [h]
   show (Number r) = show r
   show (Boolean True) = "#t"
   show (Boolean False) = "#f"
@@ -67,17 +72,17 @@ instance Show E where
 showFull :: E -> S -> String
 showFull l s = show' l
   where
-    show' e@(Ep _) = "(" ++ showPair e s ++ ")"
+    show' e@(Ep _) = "(" <> showPair e s <> ")"
     show' a = show a
 
 -- |Given a pair and an environment, show it.
 showPair (Ek Nil) _ = ""
 showPair (Ep (a, b, _)) s@(_, m) =
-  showFull (fst (m M.! a)) s ++
+  showFull (fst (m M.! a)) s <>
   case fst (m M.! b) of
-    rest@(Ep _) -> " " ++ showPair rest s
+    rest@(Ep _) -> " " <> showPair rest s
     Ek Nil -> ""
-    val -> " . " ++ showFull val s
+    val -> " . " <> showFull val s
 
 -- |Miscellaneous values
 data M

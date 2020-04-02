@@ -16,18 +16,18 @@ eval (Id i) ρ κ =
     (envLookup ρ i)
     (single
        (\case
-          Em Undefined -> wrong ("Undefined variable: " ++ i)
+          Em Undefined -> wrong ("Undefined variable: " <> i)
           e -> send e κ))
 eval (App e0 e) ρ κ =
   evals (permute (e0 : e)) ρ ((\(e:es) -> applicate e es κ) . unpermute)
-eval (If e0 ε1 ε2) ρ κ =
-  eval e0 ρ $
+eval (If ε0 ε1 ε2) ρ κ =
+  eval ε0 ρ $
   single $ \e ->
     if truish e
       then eval ε1 ρ κ
       else eval ε2 ρ κ
-eval (IfPartial e0 ε1) ρ κ =
-  eval e0 ρ $
+eval (IfPartial ε0 ε1) ρ κ =
+  eval ε0 ρ $
   single $ \e ->
     if truish e
       then eval ε1 ρ κ
@@ -43,10 +43,10 @@ eval (Lambda is γ e0) ρ κ =
                       ((\ρ' -> evalc γ ρ' (eval e0 ρ' κ')) . extends ρ is)
                       εs
                else wrong
-                      ("wrong number of arguments, expected " ++
-                       show (length is) ++
-                       ", namely " ++
-                       show is ++ " but got " ++ show (length εs) ++ " instead")))
+                      ("wrong number of arguments, expected " <>
+                       show (length is) <>
+                       ", namely " <>
+                       show is <> " but got " <> show (length εs) <> " instead")))
       κ
       (update (new σ) (Em Unspecified) σ)
 eval (LambdaV is i gs e0) ρ κ =
@@ -58,12 +58,12 @@ eval (LambdaV is i gs e0) ρ κ =
              if length es >= length is
                then tievalsrest
                       ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) .
-                       extends ρ (is ++ [i]))
+                       extends ρ (is <> [i]))
                       (length is)
                       es
                else wrong
-                      ("too few arguments, expected at least " ++
-                       show (length is) ++ ", namely " ++ show is)))
+                      ("too few arguments, expected at least " <>
+                       show (length is) <> ", namely " <> show is)))
       κ
       (update (new σ) (Em Unspecified) σ)
 eval (LambdaVV i gs e0) ρ κ = eval (LambdaV [] i gs e0) ρ κ
@@ -82,7 +82,7 @@ envLookup :: U -> Ide -> L
 envLookup u i = fromMaybe 0 (lookup i u)
 
 extends :: U -> [Ide] -> [L] -> U
-extends ρ is αs = zip is αs ++ ρ
+extends ρ is αs = zip is αs <> ρ
 
 send :: E -> K -> C
 send ε κ = κ [ε]
@@ -98,14 +98,17 @@ single ϕ es
   | length es == 1 = ϕ (es !! 0)
   | otherwise =
     wrong
-      ("wrong number of return values, expected 1 but got " ++ show (length es))
+      ("wrong number of return values, expected 1 but got " <> show (length es))
 
+-- |Given the store, return the next free cell.
 new :: S -> L
 new (c, _) = c + 1
 
+-- |The empty environment.
 emptyEnv :: U
 emptyEnv = mempty
 
+-- |The empty store.
 emptyStore :: S
 emptyStore = (0, mempty)
 
@@ -135,14 +138,14 @@ unpermute = id
 applicate :: E -> [E] -> K -> C
 applicate (Ef ε) εs κ = snd ε εs κ
 applicate χ _ _ =
-  wrong ("failed to apply " ++ show χ ++ ", expected a procedure")
+  wrong ("failed to apply " <> show χ <> ", expected a procedure")
 
 -- |Lift a Haskell function that takes one argument into a
 -- Scheme procedure.
 onearg :: (E -> K -> C) -> [E] -> K -> C
 onearg ζ [ε] κ = ζ ε κ
 onearg _ a _ =
-  wrong ("wrong number of arguments, expected 1 but got " ++ show (length a))
+  wrong ("wrong number of arguments, expected 1 but got " <> show (length a))
 
 -- |Lift a Haskell function that takes two arguments into a Scheme
 -- procedure.
@@ -150,8 +153,8 @@ twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
 twoarg ζ [ε1, ε2] κ = ζ ε1 ε2 κ
 twoarg _ χ _ =
   wrong
-    ("wrong number of arguments, expected 2 but got " ++
-     show (length χ) ++ ": " ++ show χ)
+    ("wrong number of arguments, expected 2 but got " <>
+     show (length χ) <> ": " <> show χ)
 
 -- |Scheme @list@, also an example of how Scheme procedures can be
 -- defined from other ones, but written in CPS.
@@ -176,7 +179,7 @@ factorial =
          (Ek (Number 0)) -> send (Ek (Number 1)) κ
          m@(Ek (Number n)) ->
            factorial [Ek (Number (n - 1))] $ single $ \e -> mult [e, m] κ
-         _ -> wrong "non-numeric argument to factorial")
+         χ -> wrong ("non-numeric argument to factorial" <> show χ))
 
 makeNumBinop name constructor op =
   twoarg
@@ -187,12 +190,12 @@ makeNumBinop name constructor op =
              (Ek (Number r2)) -> send (constructor (op r1 r2)) κ
              χ ->
                wrong
-                 ("non-numeric argument to " ++
-                  name ++ ", got " ++ show χ ++ " instead")
+                 ("non-numeric argument to " <>
+                  name <> ", got " <> show χ <> " instead")
          χ ->
            wrong
-             ("non-numeric argument to " ++
-              name ++ ", got " ++ show χ ++ " instead"))
+             ("non-numeric argument to " <>
+              name <> ", got " <> show χ <> " instead"))
 
 -- |Scheme @+@
 add :: [E] -> K -> C
@@ -240,7 +243,7 @@ car =
   onearg
     (\case
        (Ep (a, _, _)) -> hold a
-       χ -> \_ -> wrong ("non-pair argument to car: " ++ show χ))
+       χ -> \_ -> wrong ("non-pair argument to car: " <> show χ))
 
 -- |Scheme @cdr@
 cdr :: [E] -> K -> C
@@ -248,7 +251,7 @@ cdr =
   onearg
     (\case
        (Ep (_, a, _)) -> hold a
-       χ -> \_ -> wrong ("non-pair argument to cdr: " ++ show χ))
+       χ -> \_ -> wrong ("non-pair argument to cdr: " <> show χ))
 
 -- |Scheme @set-car!@
 setcar :: [E] -> K -> C
@@ -258,7 +261,7 @@ setcar =
        case ε1 of
          Ep (a, _, True) -> assign a ε2 (send (Em Unspecified) κ)
          Ep _ -> wrong "immutable argument to set-car!"
-         χ -> wrong ("non-pair argument to set-cdr! got " ++ show χ))
+         χ -> wrong ("non-pair argument to set-cdr!: " <> show χ))
 
 -- |Scheme @set-car@
 setcdr :: [E] -> K -> C
@@ -268,7 +271,7 @@ setcdr =
        case ε1 of
          Ep (_, a, True) -> assign a ε2 (send (Em Unspecified) κ)
          Ep _ -> wrong "immutable argument to set-cdr!"
-         χ -> wrong ("non-pair argument to set-cdr! got " ++ show χ))
+         χ -> wrong ("non-pair argument to set-cdr! got " <> show χ))
 
 -- |Scheme @eqv?@
 eqv :: [E] -> K -> C
@@ -276,11 +279,11 @@ eqv =
   twoarg
     (\ε1 ε2 ->
        case (ε1, ε2) of
-         (Ek α, Ek β)                 -> retbool (α == β)
-         (Em α, Em β)                 -> retbool (α == β)
-         (Ev α, Ev β)                 -> retbool (α == β)
-         (Ep (α, x, _), Ep (β, y, _)) -> retbool ((α == β) && (x == y))
-         (Ef (α, _), Ef (β, _))       -> retbool (α == β)
+         (Ek α, Ek β)                 -> retbool $ α == β
+         (Em α, Em β)                 -> retbool $ α == β
+         (Ev α, Ev β)                 -> retbool $ α == β
+         (Ep (α, x, _), Ep (β, y, _)) -> retbool $ α == β && x == y
+         (Ef (α, _), Ef (β, _))       -> retbool $ α == β
          _                            -> retbool False)
 
 retbool :: Bool -> K -> C
@@ -331,6 +334,44 @@ nullp = predLift p
     p (Ek Nil) = True
     p _        = False
 
+-- |Scheme @string?@
+stringp :: [E] -> K -> C
+stringp = predLift p
+  where
+    p (Ek (String _)) = True
+    p _        = False
+
+-- |Scheme @symbol->string@
+symbolToString :: [E] -> K -> C
+symbolToString = onearg
+  (\case
+      (Ek (Symbol q)) -> send (Ek (String q))
+      v -> \_ -> wrong ("non-symbol argument to symbol->string: " <> show v))
+
+-- |Scheme @string->symbol@
+stringToSymbol :: [E] -> K -> C
+stringToSymbol = onearg
+  (\case
+      (Ek (String q)) -> send (Ek (Symbol q))
+      v -> \_ -> wrong ("non-string argument to string->symbol: " <> show v))
+
+-- |Scheme @string-append@
+stringAppend = twoarg
+ (\ε1 ε2 ->
+    case (ε1, ε2) of
+      (Ek (String p), Ek (String q)) -> send (Ek (String (p <> q)))
+      (χ, Ek (String q)) -> \_ -> wrong
+                                    ("non-string argument to string-append: " <> show χ)
+      (Ek (String p), χ) -> \_ -> wrong
+                                    ("non-string argument to string-append: " <> show χ)
+      (χ, χ') -> \_ -> wrong ("non-string arguments to string-append: " <> show χ <> " " <> show χ'))
+
+-- |Scheme @number->string
+numberToString = onearg
+  (\case
+      (Ek (Number n)) -> send (Ek (String (show n)))
+      χ -> \_ -> wrong ("non-numeric argument to number->string: " <> show χ))
+
 valueStdExtract (_, Nothing, _) =
   error "Failed to extract value from expression"
 valueStdExtract (_, Just a, _) = head a
@@ -344,14 +385,14 @@ reval :: String -> A
 reval s =
   case parse parseExpr "" s of
     Right res -> evalStd res
-    Left err  -> ("Error: " ++ show err, Nothing, emptyStore)
+    Left err  -> ("Error: " <> show err, Nothing, emptyStore)
 
 -- |Parse a string into an expression.
 rparse :: String -> Expr
 rparse s =
   case parse parseExpr "" s of
     Right res -> res
-    Left _    -> error ("Failed to parse" ++ s)
+    Left _    -> error ("Failed to parse" <> s)
 
 -- |An example of defining a Scheme procedure given an expression.
 recursive =
@@ -380,7 +421,7 @@ apply =
     (\ε1 ε2 κ ->
        case ε1 of
          Ef f -> valueslist [ε2] (\εs -> applicate ε1 εs κ)
-         χ    -> wrong ("bad procedure argument to apply, got " ++ show χ))
+         χ    -> wrong ("bad procedure argument to apply: " <> show χ))
 
 valueslist :: [E] -> K -> C
 valueslist =
@@ -392,7 +433,7 @@ valueslist =
              [ε]
              (\εs -> valueslist εs (\εs -> car [ε] (single (\ε -> κ (ε : εs)))))
          (Ek Nil) -> κ []
-         χ -> wrong ("non-list argument to values-list, got " ++ show χ))
+         χ -> wrong ("non-list argument to values-list:" <> show χ))
 
 tievals :: ([L] -> C) -> [E] -> C
 tievals ϕ [] σ     = ϕ [] σ
@@ -411,7 +452,7 @@ callcc =
                [Ef (new σ, \εs κ' -> κ εs)]
                κ
                (update (new σ) (Em Unspecified) σ)
-         _ -> wrong ("bad procedure argument, got " ++ show ε))
+         _ -> wrong ("bad procedure argument to call/cc: " <> show ε))
 
 -- |Scheme @values@
 values :: [E] -> K -> C
@@ -422,7 +463,7 @@ cwv = twoarg (\ε1 ε2 κ -> applicate ε1 [] (\εs -> applicate ε2 εs κ))
 
 tievalsrest :: ([L] -> C) -> Int -> [E] -> C
 tievalsrest f es v =
-  list (dropfirst es v) (single (\e -> tievals f (takefirst es v ++ [e])))
+  list (dropfirst es v) (single (\e -> tievals f (takefirst es v <> [e])))
 
 dropfirst = drop
 
@@ -471,7 +512,12 @@ builtInOps =
   , ("values", values)
   , ("call-with-current-continuation", callcc)
   , ("call/cc", callcc)
-  ] ++
+  , ("string?", stringp)
+  , ("symbol->string", symbolToString)
+  , ("string->symbol", stringToSymbol)
+  , ("string-append", stringAppend)
+  , ("number->string", numberToString)
+  ] <>
   exprDefinedOps
 
 -- |The list of names of standard operations.
@@ -492,5 +538,3 @@ stdPrelude = (n, M.fromList ((0,(Em Undefined, False)) : zipWith makeOpStore [1 
 -- |The standard store, consisting of a Prelude and infinite space.
 stdStore :: S
 stdStore = stdPrelude 
-  -- where
-  --   infStore = repeat (Em Undefined, False)
