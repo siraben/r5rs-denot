@@ -10,7 +10,7 @@ desugared into primitive expressions (@Expr@).
 
 module SchemeParser where
 
-import Data.Char
+import Data.List.NonEmpty (fromList, NonEmpty((:|)))
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
 import Data.Functor
@@ -69,6 +69,14 @@ schemeId = (:) <$> satisfy initp <*> many (satisfy subseqp)
   string "-" <|>
   try (string "...") <?> "identifier"
 
+-- |Parse a matching identifier
+matchId s = do n <- schemeId
+               if s == n
+               then pure s
+               else unexpected n
+-- |Reserved symbol
+reserved = tok . matchId
+
 lparen = symb "("
 
 rparen = symb ")"
@@ -92,7 +100,7 @@ formals =
 
 schemeLambda =
   parens $ do
-    symb "lambda"
+    reserved "lambda"
     fs <- tok formals
     exprs <- schemeExpr `sepBy1` space
     return $
@@ -104,9 +112,10 @@ schemeLambda =
 
 schemeBegin =
   parens $ do
-    symb "begin"
+    reserved "begin"
     wrapBegin <$> schemeExpr `sepBy1` space
 
+unsnoc :: [a] -> ([a], a)
 unsnoc xs = loop [] xs
   where
     loop hs =
@@ -140,16 +149,17 @@ schemeQuotable =
     return $
       App (Id "cons") [Const (Symbol "quote"), App (Id "cons") [x, Const Nil]]
 
+escChar = char '\\' *> (satisfy (`elem` "'\"\\") <|> (const '\n' <$> char 'n'))
+litOne delim = (escChar <||> satisfy (/= delim))
+litStr = (between (char '"') (symb "\"") (many (litOne '"')))
 
-schemeString = do char '"'
-                  s <- many (satisfy (/= '"'))
-                  tok (char '"')
-                  pure (Const (String s))
+schemeString = Const . String <$> litStr
+
 
 schemeQuoteSpecialForm = symb "'" >> schemeQuotable
 
 schemeQuoted =
-  schemeQuoteSpecialForm <|> parens (symb "quote" >> schemeQuotable)
+  schemeQuoteSpecialForm <|> parens (reserved "quote" >> schemeQuotable)
 
 schemeNil = lparen *> rparen *> return (Const Nil)
 
@@ -158,11 +168,11 @@ schemeApp = do
   return $ App e es
 
 schemeSet =
-  parens (symb "set!" *> (Set <$> tok schemeId <*> schemeExpr))
+  parens (reserved "set!" *> (Set <$> tok schemeId <*> schemeExpr))
 
 schemeIf =
   parens $ do
-    symb "if"
+    reserved "if"
     p <- tok schemeExpr
     c <- tok schemeExpr
     a <- optionMaybe schemeExpr
@@ -192,7 +202,7 @@ desugarLet bindings bodies = App (Lambda names (init bodies) (last bodies)) exps
     (names, exps) = unzip bindings
 
 schemeLet =
-  parens (symb "let" *>
+  parens (reserved "let" *>
          (desugarLet <$> schemeLetBindings <*> many1 schemeExpr))
 
 desugarLets bindings bodies =
@@ -203,13 +213,13 @@ schemeLetrecBinding = parens (parens ((,) <$> tok schemeId <*> schemeExpr))
 
 schemeLets =
   parens $ do
-    symb "let*"
+    reserved "let*"
     bindings <- schemeLetBindings
     desugarLets bindings <$> many1 schemeExpr
 
 schemeLetrec =
   parens $ do
-    symb "letrec"
+    reserved "letrec"
     binding <- schemeLetrecBinding
     let fname = fst binding
         fbody = snd binding
@@ -228,11 +238,11 @@ schemeCondBranches =
     e <- schemeExpr
     return (p, e)
 
-schemeCond = parens $ symb "cond" >> desugarCond <$> schemeCondBranches
+schemeCond = parens $ reserved "cond" >> desugarCond <$> schemeCondBranches
 
 schemeAnd = 
   parens $ do
-    symb "and"
+    reserved "and"
     exprs <- schemeExpr `sepBy` space
     pure (foldr (\e es -> If e es (Const (Boolean False)))
                 (Const (Boolean True)) exprs)
@@ -240,7 +250,7 @@ schemeAnd =
 -- Danger!  We're writing unhygienic macros!
 schemeOr = 
   parens $ do
-    symb "or"
+    reserved "or"
     exprs <- schemeExpr `sepBy` space
     pure (foldr g (Const (Boolean False)) exprs)
   where
@@ -262,9 +272,48 @@ schemeExpr = schemeCompoundExpr <|> schemeNum <|> schemeBool <|>
 wrapBegin :: [Expr] -> Expr
 wrapBegin a = App (Lambda [] (init a) (last a)) []
 
+schemeCommand = schemeExpr
+
 parseExpr = wrapBegin <$> (space >> schemeExpr `sepEndBy1` space <* eof)
 
 -- |Parse a string into a Scheme 'Expr', but return @Nothing@ if there
 -- was unconsumed input.
 readExpr :: String -> Either ParseError Expr
 readExpr = parse parseExpr ""
+
+readProg = parse schemeProgram ""
+
+schemeProgram :: Parser Expr
+schemeProgram = desugarProgram <$> (space >> prog) <* eof
+  where prog = fromList <$> ((Right <$> schemeDefn) <||> (Left <$> schemeCommand)) `sepEndBy1` space
+
+schemeDefn :: Parser Defn
+schemeDefn =
+  parens $ do
+    reserved "define"
+    fs <- tok formals
+    exprs <- schemeExpr `sepBy1` space
+    let (cmds, expr) = unsnoc exprs
+    case fs of
+       ([], Just v)   -> pure (Defn1 v expr)
+       ([], Nothing) -> fail ("invalid pattern in: (define () " <> show exprs <> ")")
+       ((f:args), Just rest) -> pure (Defn3 f args rest cmds expr)
+       ((f:args), Nothing) -> pure (Defn2 f args cmds expr)
+
+-- |Convert a program to a expression, binding all top level defines
+-- to the value #<undefined>.
+desugarProgram :: Program -> Expr
+desugarProgram (x :| xs) = desugarLets declNames progBody
+  where
+    l = (x:xs)
+    extractName (Defn1 i _) = i
+    extractName (Defn2 i _ _ _) = i
+    extractName (Defn3 i _ _ _ _) = i
+    declNames = [(extractName d, Const Nil) | Right d <- l]
+    progBody = either id desugarDefn <$> l
+
+-- |Convert define to set!
+desugarDefn :: Defn -> Com
+desugarDefn (Defn1 x e) = Set x e
+desugarDefn (Defn2 f args cmds e) = Set f (Lambda args cmds e )
+desugarDefn (Defn3 f args rest cmds e) = Set f (LambdaV args rest cmds e)

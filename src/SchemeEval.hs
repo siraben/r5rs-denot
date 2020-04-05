@@ -2,11 +2,9 @@
 
 module SchemeEval where
 
-import Data.List
 import Data.Maybe
 import SchemeParser
 import SchemeTypes
-import Text.ParserCombinators.Parsec hiding (space)
 import qualified Data.IntMap as M
 
 eval :: Expr -> U -> K -> C
@@ -393,14 +391,14 @@ liftString = liftExpr . rparse
 -- |Parse and evaluate a string.
 reval :: String -> A
 reval s =
-  case parse parseExpr "" s of
+  case readProg s of
     Right res -> evalStd res
     Left err  -> ("Error: " <> show err, Nothing, emptyStore)
 
 -- |Parse a string into an expression.
 rparse :: String -> Expr
 rparse s =
-  case parse parseExpr "" s of
+  case readProg s of
     Right res -> res
     Left _    -> error ("Failed to parse" <> s)
 

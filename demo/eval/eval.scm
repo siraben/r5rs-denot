@@ -1,5 +1,6 @@
 ;; A meta-circular interpreter in Scheme
 ;; Adapted from http://paulgraham.com/rootsoflisp.html
+;; This variant runs without any special forms implemented.
 
 ((lambda (recursive atom not and cadr caddr caar caddar cadar)
    ((lambda (assoc pair append evcon evlis)

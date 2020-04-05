@@ -53,6 +53,9 @@ parsed and expanded in Haskell, but a hygienic macro system will take
 their place.
 
 ```text
+(define <id> <expr>)
+(define (<id> <id>*) <expr>*)
+(define (<id>* . <id>) <expr>*)
 '<expr>
 (begin <expr>*)
 (cond (<expr> <expr>)*)
@@ -68,24 +71,24 @@ evaluate it.
 
 ### Usage Examples
 ```scheme
-Scheme> (letrec ((fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))) (fact 6))
+Scheme> (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 6)
 720
-Memory used: 60 cells
+Memory used: 10 cells
 ```
 Alternatively, read it from a file in the `demo` folder, using GHCi:
 ```text
 -- Factorial
-SchemeRepl> repf "demo/factorial.scm"
+λ> repf "demo/factorial.scm"
 720
-Memory used: 59 cells
+Memory used: 10 cells
 
 -- Primes via streams
-SchemeRepl> repf "demo/primes.scm"
+λ> repf "demo/primes.scm"
 (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
-Memory used: 6410 cells
+Memory used: 3196 cells
 
 -- Mutable state
-SchemeRepl> repf "demo/counter.scm"
+λ> repf "demo/counter.scm"
 (1 2 3 4)
 Memory used: 15 cells
 ```
@@ -113,29 +116,31 @@ interpreter runs reasonably fast.
 
 ### Performance Statistics
 ```text
-SchemeRepl> :set +s
-SchemeRepl> repf "demo/primes.scm"
+λ> repf "demo/primes.scm"
 (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71)
 Memory used: 6410 cells
-(0.09 secs, 40,075,816 bytes)
-SchemeRepl> repf "demo/eval-lets.scm"
+λ> repf "demo/eval/eval-define.scm"
 a
-Memory used: 848 cells
-(0.03 secs, 26,300,920 bytes)
-SchemeRepl> repf "demo/counter.scm"
+Memory used: 409 cells
+λ> repf "demo/counter.scm"
 (1 2 3 4)
 Memory used: 15 cells
-(0.01 secs, 2,253,408 bytes)
+λ> repf "demo/meta-circ.scm"
+"\n720"
+Memory used: 16142 cells
 ```
 
 ## Feature Plans
+- [x] Strings
+- [x] `define` program declarations
+  - [ ] Desugar into `let` and `set!`
 - [ ] Escaping characters in strings
 - [ ] quasiquote/unquote
 - [ ] Hygienic macro expansion, according to [this
-      paper](https://legacy.cs.indiana.edu/~dyb/pubs/LaSC-5-4-pp295-326.pdf).
-- [ ] Vectors (using IntMap as representation).
+      paper](https://legacy.cs.indiana.edu/~dyb/pubs/LaSC-5-4-pp295-326.pdf)
+- [ ] Vectors (using IntMap as representation)
 - [ ] Rewrite `eval` from a store-passing, continuation-passing
-      interpreter to a monadic style.
-  - [ ] Inject the resulting monad into `IO`.
-    - [ ] Implement ports, and user I/O.
+      interpreter to a monadic style
+  - [ ] Inject the resulting monad into `IO`
+    - [ ] Implement ports, and user I/O
       

@@ -23,14 +23,11 @@ reportResult (a, Just e, s) =
         if x > 1 || x == 0
           then "s"
           else ""
-   in putStrLn $
-      concat
-        [ showFull (head e) s
-        , a
-        , "\nMemory used: "
-        , show memusage
-        , pluralize " cell" memusage
-        ]
+   in do mapM_ putStrLn ((`showFull` s) <$> e)
+         mapM_ putStrLn
+                 [ if a == "" then "No errors" else "Errors: " <> a
+                 , "Memory used: " <> show memusage <> pluralize " cell" memusage
+                 ]
 
 -- |The main REPL loop.
 repl :: IO ()
@@ -59,6 +56,6 @@ rpf :: String -> IO ()
 rpf filename = do
   x <- openFile filename ReadMode
   y <- hGetContents x
-  case readExpr y of
+  case readProg y of
     Right a -> print a
     Left a -> putStrLn $ "Failed to parse file: " ++ show a

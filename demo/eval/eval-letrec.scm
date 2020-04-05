@@ -1,6 +1,7 @@
 ;; A meta-circular interpreter in Scheme
 ;; Adapted from http://paulgraham.com/rootsoflisp.html
 ;; This variant tests the let, cond, let* and letrec syntax.
+
 (let* ((eq eqv?)
        (atom (lambda (x) (if (null? x) #t (if (symbol? x) #t #f))))
        (not (lambda (x) (if x #f #t)))

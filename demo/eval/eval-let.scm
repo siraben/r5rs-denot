@@ -1,6 +1,7 @@
 ;; A meta-circular interpreter in Scheme
 ;; Adapted from http://paulgraham.com/rootsoflisp.html
 ;; This variant tests the let syntax.
+
 (let ((recursive
        (lambda (fn)
          ((lambda (h) (h h))

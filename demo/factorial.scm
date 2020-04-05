@@ -1,13 +1,6 @@
-;; I am a comment!
+(define (fact n)
+  (if (= n 0)
+      1
+      (* n (fact (- n 1)))))
 
-;; This program is valid core Scheme, and computes factorial of 6.
-(((lambda (fn)
-    ((lambda (h) (h h))
-     (lambda (g)
-       (fn (lambda arglist
-             (apply (g g) arglist))))))
-  (lambda (f)
-    (lambda (n)
-      (if (eqv? 0 n)
-          1
-          (* n (f (- n 1))))))) 6)
+(fact 6)

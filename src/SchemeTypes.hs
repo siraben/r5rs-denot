@@ -6,8 +6,8 @@ As defined in the R5RS standard.
 -}
 module SchemeTypes where
 
-import Data.List
 import qualified Data.IntMap as M
+import Data.List.NonEmpty
 
 -- |Locations
 type L = Int
@@ -65,7 +65,7 @@ instance Show E where
   show (Ev (l, _)) = show l
   show (Es (l, _)) = show l
   show (Em m) = show m
-  show (Ef f) = "#<procedure>"
+  show (Ef _) = "#<procedure>"
 
 -- |Show an expression, but in full (i.e. follow recursively go down
 -- the @car@ and @cdr@ of the value in the given store.
@@ -83,6 +83,7 @@ showPair (Ep (a, b, _)) s@(_, m) =
     rest@(Ep _) -> " " <> showPair rest s
     Ek Nil -> ""
     val -> " . " <> showFull val s
+showPair _ _ = error "non-pair argument to showPair"
 
 -- |Miscellaneous values
 data M
@@ -150,3 +151,18 @@ data Expr
 
 -- |Commands
 type Com = Expr
+
+-- |Definitions
+-- Defn1 x e                == (define x e)
+-- Defn2 x [y1, y2 ...] e   == (define (x y1 y2 ...) e)
+-- Defn3 x [y1, y2 ...] r e == (define (x y1 y2 ... . r) e)
+data Defn = Defn1 Ide Expr
+          | Defn2 Ide [Ide] [Com] Expr
+          | Defn3 Ide [Ide] Ide [Com] Expr
+          deriving (Show)
+
+-- body -> definition* sequence
+-- sequence -> command* expression
+data Body = Body [Defn] [Com] Expr
+
+type Program = NonEmpty (Either Com Defn)
