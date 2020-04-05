@@ -8,8 +8,8 @@ Haskell because in a sense it _is_ Haskell!  We can turn the above
 image into a Haskell code fragment:
 
 ```haskell
--- Evaluate a lambda expression with an environment, continuation and
--- store.
+-- Evaluate a lambda expression with an environment e0, continuation κ
+-- and store σ.
 eval (Lambda is gs e0) ρ κ =
   \σ ->
     send
@@ -25,15 +25,19 @@ eval (Lambda is gs e0) ρ κ =
       (update (new σ) (Em Unspecified) σ)
 ```
 
-Currently, the standard environment contains the following primitive procedures:
+Currently, the standard environment contains the following primitive
+procedures:
+
 ```text
 + * - / modulo < > = >= <= cons car cdr list eqv? boolean? symbol?
 procedure? pair? number? set-car! set-cdr! null? apply
 call-with-values values call-with-current-continuation call/cc
+string? symbol->string string->symbol string-append number->string
 recursive
 ```
 
 And the following core special forms:
+
 ```text
 (if <expr> <expr> <expr>)
 (if <expr> <expr>)
@@ -44,11 +48,18 @@ And the following core special forms:
 (<expr> <expr>*)
 ```
 
-Some derived forms have been implemented:
+The following derived forms have been implemented.  Currently they are
+parsed and expanded in Haskell, but a hygienic macro system will take
+their place.
+
 ```text
+'<expr>
+(begin <expr>*)
 (cond (<expr> <expr>)*)
 (let ((<id> <expr>)*) <expr>*)
 (letrec ((<id> <expr>)) <expr>*)
+(and <expr>*)
+(or <expr>*)
 ```
 
 Ensure Cabal is installed and build this project by running `cabal
@@ -116,3 +127,15 @@ SchemeRepl> repf "demo/counter.scm"
 Memory used: 15 cells
 (0.01 secs, 2,253,408 bytes)
 ```
+
+## Feature Plans
+- [ ] Escaping characters in strings
+- [ ] quasiquote/unquote
+- [ ] Hygienic macro expansion, according to [this
+      paper](https://legacy.cs.indiana.edu/~dyb/pubs/LaSC-5-4-pp295-326.pdf).
+- [ ] Vectors (using IntMap as representation).
+- [ ] Rewrite `eval` from a store-passing, continuation-passing
+      interpreter to a monadic style.
+  - [ ] Inject the resulting monad into `IO`.
+    - [ ] Implement ports, and user I/O.
+      

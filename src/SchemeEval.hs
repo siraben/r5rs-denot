@@ -70,26 +70,36 @@ eval (LambdaVV i gs e0) ρ κ = eval (LambdaV [] i gs e0) ρ κ
 eval (Set i e) ρ κ =
   eval e ρ $ single $ \e -> assign (envLookup ρ i) e (send (Em Unspecified) κ)
 
+-- |Evaluate a list of expressions, sending the collected result to
+-- the continuation.
 evals :: [Expr] -> U -> K -> C
 evals [] _ κ = κ []
 evals (e0:es) ρ κ = eval e0 ρ $ single $ \e0 -> evals es ρ $ \es -> κ (e0 : es)
 
+-- |Evaluate a list of commands, returning to the continuation.
 evalc :: [Expr] -> U -> C -> C
 evalc [] ρ θ      = θ
 evalc (g0:gs) ρ θ = eval g0 ρ $ \es -> evalc gs ρ θ
 
+-- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
 envLookup u i = fromMaybe 0 (lookup i u)
 
+-- |Extend an environment with a list of identifiers and their store
+-- locations.
 extends :: U -> [Ide] -> [L] -> U
 extends ρ is αs = zip is αs <> ρ
 
+-- |Send a value to the continuation.
 send :: E -> K -> C
 send ε κ = κ [ε]
 
+-- |Raise an error.
 wrong :: X -> C
 wrong χ ρ = (χ, Nothing, ρ)
 
+-- |Given a location, look it up in the store and send it to the
+-- continuation.
 hold :: L -> K -> C
 hold α κ σ@(c, m) = send (fst (m M.! α)) κ σ
 
