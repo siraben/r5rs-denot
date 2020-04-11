@@ -54,7 +54,8 @@ constLit :: Functor f => f a -> b -> f b
 constLit = ($>)
 
 -- |Parse a boolean.
-schemeBool = (char '#') *> ((string "t" *> return (Const (Boolean True))) <|> (string "f" *> return (Const (Boolean False))))
+schemeBool = (char '#') *> ((string "t" *> return (Const (Boolean True))) <|>
+                            (string "f" *> return (Const (Boolean False))))
 
 initp x = x `elem` concat [['a' .. 'z'], ['A' .. 'Z'], "!$%&*/:<=>?_~"]
 

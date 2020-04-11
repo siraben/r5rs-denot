@@ -1,11 +1,11 @@
-# An interpreter for R5RS Scheme based on formal semantics
+# An interpreter for R5RS Scheme based on denotational semantics
 ![R5RS denotational semantics for evaluating lambdas](lambda-def.png)
 
 The R5RS Scheme specification is a 50-page beauty, outlining the
 syntax and semantics of Scheme in easy to understand prose, and
-concludes with a formal semantics.  The semantics looks a lot like
-Haskell because in a sense it _is_ Haskell!  We can turn the above
-image into a Haskell code fragment:
+concludes with a denotational semantics.  The semantics looks a lot
+like Haskell because in a sense it _is_ Haskell!  We can turn the
+above image into a Haskell code fragment:
 
 ```haskell
 -- Evaluate a lambda expression with an environment e0, continuation κ
@@ -130,17 +130,28 @@ Memory used: 15 cells
 Memory used: 16142 cells
 ```
 
-## Feature Plans
+## Future Plans
 - [x] Strings
 - [x] `define` program declarations
-  - [ ] Desugar into `let` and `set!`
-- [ ] Escaping characters in strings
+  - [x] Desugar into `let` and `set!`
+- [x] Escaping characters in strings
 - [ ] quasiquote/unquote
 - [ ] Hygienic macro expansion, according to [this
       paper](https://legacy.cs.indiana.edu/~dyb/pubs/LaSC-5-4-pp295-326.pdf)
 - [ ] Vectors (using IntMap as representation)
 - [ ] Rewrite `eval` from a store-passing, continuation-passing
       interpreter to a monadic style
+  - Note: has been very difficult to combine effects due to the
+    intricacy of the semantics
   - [ ] Inject the resulting monad into `IO`
     - [ ] Implement ports, and user I/O
       
+## Limitations
+This is also a good example of the problems with "unstable
+denotations", as the specification is quite rigid and would have to be
+re-written from scratch in the face of new effects.
+
+Furthermore, the semantics does not cover all of the language, and
+several language features are missing semantics.  Thus, we can only
+guess at the appropriate semantics for this, and test them against the
+examples in the earlier sections of the paper.

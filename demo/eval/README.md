@@ -1,4 +1,4 @@
-# Paul Graham's Metacircular evaluator, constantly revisited
+# Paul Graham's metacircular evaluator, constantly revisited
 
 A metacircular evaluator is a great way to test special forms as they
 are added.  This directory also serves as a sort of chronology of

@@ -511,24 +511,6 @@
       env))
 
 ;; empty-env : env
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (define (empty-env var modify? value!)
   (if modify?
       (begin (display "error: cannot modify undefined variable: ")
