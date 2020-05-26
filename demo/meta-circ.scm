@@ -80,12 +80,12 @@
                                           (string-append
                                            "$"
                                            (number-to-string gensym-count))))))))
-;; d3-tagged-list? : symbol s-exp -> boolean
+;; s3d-tagged-list? : symbol s-exp -> boolean
 
-(define (d3-tagged-list? tag lst)
+(define (s3d-tagged-list? tag lst)
   (and (pair? lst)
        (or (eq? (car lst) tag)
-           (and (procedure? (car lst)) ; in case it's a d3 s-expression
+           (and (procedure? (car lst)) ; in case it's a s3d s-expression
                 (equal? ((car lst)) (initial tag))))))
 
 ;; tagged-list? : symbol s-exp -> boolean
@@ -131,37 +131,37 @@
 
 (define (define->exp s-exp) (cond
                              ((define-var? s-exp) (caddr s-exp))
-                             ((define-fun? s-exp) (cons d3-lambda
+                             ((define-fun? s-exp) (cons s3d-lambda
                                                         (cons (cdadr s-exp)
                                                               (cddr s-exp))))))
 
 ;; Expression types.
 
 ;; if
-(define (if? s-exp)        (d3-tagged-list? 'if s-exp))
+(define (if? s-exp)        (s3d-tagged-list? 'if s-exp))
 (define (if-single? s-exp) (and (if? s-exp) (null? (cdddr s-exp))))
 (define (if->cond  s-exp)  (cadr s-exp))
 (define (if->true  s-exp)  (caddr s-exp))
 (define (if->false s-exp)  (cadddr s-exp))
 
 ;; quote
-(define (quote? s-exp)     (d3-tagged-list? 'quote s-exp))
+(define (quote? s-exp)     (s3d-tagged-list? 'quote s-exp))
 (define (quote->text s-exp) (cadr s-exp))
 
 ;; lambda
-(define (lambda? s-exp)               (d3-tagged-list? 'lambda s-exp))
+(define (lambda? s-exp)               (s3d-tagged-list? 'lambda s-exp))
 (define (lambda-multi? s-exp)         (and (lambda? s-exp) (symbol? (cadr s-exp))))
 (define (lambda->formals s-exp)       (cadr s-exp))
 (define (lambda->body s-exp)          (cddr s-exp))
 (define (lambda->body-as-exp s-exp)   (make-begin (cddr s-exp)))
 
 ;; begin
-(define (begin? s-exp)      (d3-tagged-list? 'begin s-exp))
+(define (begin? s-exp)      (s3d-tagged-list? 'begin s-exp))
 (define (begin->body s-exp) (cdr s-exp))
 
 (define (make-begin exps)     (cond
                                ((singlet? exps) (car exps))
-                               (else (cons d3-begin exps))))
+                               (else (cons s3d-begin exps))))
 
 ;; application
 (define (app? s-exp)      (pair? s-exp))
@@ -173,25 +173,25 @@
 (define (binding->exp binding) (cadr binding))
 
 ;; letrec
-(define (letrec? s-exp)             (d3-tagged-list? 'letrec s-exp))
+(define (letrec? s-exp)             (s3d-tagged-list? 'letrec s-exp))
 (define (letrec->bindings s-exp)    (cadr s-exp))
 (define (letrec->body s-exp)        (cddr s-exp))
 (define (letrec->body-as-exp s-exp) (make-begin (letrec->body s-exp)))
 
 ;; let
-(define (let? s-exp)             (d3-tagged-list? 'let s-exp))
+(define (let? s-exp)             (s3d-tagged-list? 'let s-exp))
 (define (let->bindings s-exp)    (cadr s-exp))
 (define (let->body s-exp)        (cddr s-exp))
 (define (let->body-as-exp s-exp) (make-begin (let->body s-exp)))
 
 ;; let*
-(define (let*? s-exp)             (d3-tagged-list? 'let* s-exp))
+(define (let*? s-exp)             (s3d-tagged-list? 'let* s-exp))
 (define (let*->bindings s-exp)    (cadr s-exp))
 (define (let*->body s-exp)        (cddr s-exp))
 (define (let*->body-as-exp s-exp) (make-begin (let*->body s-exp)))
 
 ;; or
-(define (or? s-exp)      (d3-tagged-list? 'or s-exp))
+(define (or? s-exp)      (s3d-tagged-list? 'or s-exp))
 (define (or->exps s-exp) (cdr s-exp))
 
 (define (make-or exps)
@@ -202,7 +202,7 @@
 
 
 ;; and
-(define (and? s-exp)      (d3-tagged-list? 'and s-exp))
+(define (and? s-exp)      (s3d-tagged-list? 'and s-exp))
 (define (and->exps s-exp) (cdr s-exp))
 
 (define (make-and exps)
@@ -213,13 +213,13 @@
 
 
 ;; cond
-(define (cond? s-exp) (d3-tagged-list? 'cond s-exp))
+(define (cond? s-exp) (s3d-tagged-list? 'cond s-exp))
 (define (cond->clauses s-exp) (cdr s-exp))
 
 (define (arrow-clause? clause) (and (pair? clause)
                                     (pair? (cdr clause))
                                     (eq? (cadr clause) '=>)))
-(define (else-clause? clause) (d3-tagged-list? 'else clause))
+(define (else-clause? clause) (s3d-tagged-list? 'else clause))
 
 (define (cond-clause->exp clause)
   (cond
@@ -236,19 +236,19 @@
    (else (car clause))))
 
 ;; set!
-(define (set!? s-exp)     (d3-tagged-list? 'set! s-exp))
+(define (set!? s-exp)     (s3d-tagged-list? 'set! s-exp))
 (define (set!->var s-exp) (cadr s-exp))
 (define (set!->exp s-exp) (caddr s-exp))
 
 ;; macro
-(define (macro? s-exp)      (d3-tagged-list? 'macro s-exp))
+(define (macro? s-exp)      (s3d-tagged-list? 'macro s-exp))
 (define (macro->proc s-exp) (cadr s-exp))
 
 
 ;; Special values.
 
 ;; syntax-primitive
-(define (syntax-primitive? value)      (d3-tagged-list? 'syntax-primitive value))
+(define (syntax-primitive? value)      (s3d-tagged-list? 'syntax-primitive value))
 (define (syntax-primitive->eval value) (cadr value))
 
 
@@ -267,7 +267,7 @@
                                  (if (null? defs)
                                      (make-begin exps)
                                      (let ((bindings (map def->binding defs)))
-                                       (list d3-letrec
+                                       (list s3d-letrec
                                              bindings
                                              (make-begin exps)))))))
 
@@ -283,11 +283,11 @@
                                    #f))
                            (letrec->bindings exp)))
             (sets (map (lambda (binding)
-                         (list d3-set!
+                         (list s3d-set!
                                (binding->var binding)
                                (binding->exp binding)))
                        (letrec->bindings exp))))
-        (list d3-let
+        (list s3d-let
               bindings
               (make-begin
                (append sets
@@ -309,7 +309,7 @@
          ((singlet? clause)      (make-or (cons clause
                                                 (cond-clauses->if (cdr clauses)))))
          ((else-clause? clause)  (cond-clause->exp clause))
-         (else                   (list d3-if
+         (else                   (list s3d-if
                                        (cond-clause->test clause)
                                        (cond-clause->exp clause)
                                        (cond-clauses->if (cdr clauses))))))))
@@ -323,7 +323,7 @@
         (cond 
          ((null? exps)    #t)
          ((singlet? exps) (car exps))
-         (else            (list d3-if (car exps)
+         (else            (list s3d-if (car exps)
                                 (and->if (cons 'and (cdr exps)))
                                 #f))))))
 
@@ -338,9 +338,9 @@
          ((null? exps)    #f)
          ((singlet? exps) (car exps))
          (else            (let (($tmp (gensym "or-tmp")))
-                            (list d3-let (list (list $tmp (car exps)))
-                                  (list d3-if $tmp $tmp
-                                        (or->if (cons d3-or (cdr exps)))))))))))
+                            (list s3d-let (list (list $tmp (car exps)))
+                                  (list s3d-if $tmp $tmp
+                                        (or->if (cons s3d-or (cdr exps)))))))))))
 
 
 
@@ -353,9 +353,9 @@
 
 (define (let*-bindings->let bindings body)
   (cond
-   ((singlet? bindings) (cons d3-let (cons (list (car bindings)) body)))
+   ((singlet? bindings) (cons s3d-let (cons (list (car bindings)) body)))
    ((null? bindings)    (make-begin body))
-   (else                (cons d3-let (cons (list (car bindings)) 
+   (else                (cons s3d-let (cons (list (car bindings)) 
                                            (list (let*-bindings->let (cdr bindings) body)))))))
 
 
@@ -364,7 +364,7 @@
   (if (not (let? exp))
       exp
       (unzip-amap-k (let->bindings exp) (lambda (vars exps)
-                                          (cons (cons d3-lambda 
+                                          (cons (cons s3d-lambda 
                                                       (cons vars 
                                                             (let->body exp)))
                                                 exps)))))
@@ -581,24 +581,24 @@
 (define (initial sym) 
   (env-lookup (initial-environment) sym))
 
-;; d3 : value -> d3-s-exp
+;; s3d : value -> s3d-s-exp
 
-(define (d3 value)
+(define (s3d value)
   (lambda () value))
 
-;; d3 primitives:
+;; s3d primitives:
 
-(define d3-quote   (d3 (initial 'quote)))
-(define d3-if      (d3 (initial 'if)))
-(define d3-cond    (d3 (initial 'cond)))
-(define d3-and     (d3 (initial 'and)))
-(define d3-or      (d3 (initial 'or)))
-(define d3-let     (d3 (initial 'let)))
-(define d3-let*    (d3 (initial 'let*)))
-(define d3-letrec  (d3 (initial 'letrec)))
-(define d3-set!    (d3 (initial 'set!)))
-(define d3-lambda  (d3 (initial 'lambda)))
-(define d3-begin   (d3 (initial 'begin)))
+(define s3d-quote   (s3d (initial 'quote)))
+(define s3d-if      (s3d (initial 'if)))
+(define s3d-cond    (s3d (initial 'cond)))
+(define s3d-and     (s3d (initial 'and)))
+(define s3d-or      (s3d (initial 'or)))
+(define s3d-let     (s3d (initial 'let)))
+(define s3d-let*    (s3d (initial 'let*)))
+(define s3d-letrec  (s3d (initial 'letrec)))
+(define s3d-set!    (s3d (initial 'set!)))
+(define s3d-lambda  (s3d (initial 'lambda)))
+(define s3d-begin   (s3d (initial 'begin)))
 
 
 ;; perform-apply : value app-exp env -> value
