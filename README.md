@@ -71,7 +71,7 @@ evaluate it.
 
 ### Usage Examples
 ```scheme
-Scheme> (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 6)
+r5rs-denot> (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 6)
 720
 Memory used: 10 cells
 ```

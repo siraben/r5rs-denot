@@ -10,7 +10,6 @@ import SchemeParser
 import SchemeTypes
 import System.Exit
 import System.IO
-import qualified Data.IntMap as M
 
 -- |Print the contents of a value of type 'Result' 'Val', or an error
 -- message.
@@ -32,7 +31,7 @@ reportResult (a, Just e, s) =
 -- |The main REPL loop.
 repl :: IO ()
 repl = do
-  putStr "Scheme> "
+  putStr "r5rs-denot> "
   hFlush stdout
   done <- isEOF
   if done
