@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 
 module SchemeEval where
@@ -6,6 +9,75 @@ import Data.Maybe
 import SchemeParser
 import SchemeTypes
 import qualified Data.IntMap as M
+import Control.Monad.Reader
+import Control.Monad.Cont
+import Control.Monad.State
+
+newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (State s)) a }
+                 deriving (Functor, Applicative, Monad, MonadReader u,  MonadCont)
+
+type Scheme' a = Scheme U K S a
+{-
+eval :: Expr -> U -> K -> C
+     = Expr -> U -> ([E] -> C) -> C
+     = Expr -> U -> ([E] -> S -> A) -> S -> A
+     ~ Expr -> U -> ([E] -> State S A) -> State S A
+     ~ Expr -> U -> ContT [E] (State S A)
+     ~ Expr -> Reader U (ContT [E] (State S A))
+
+
+-}
+
+
+--    :: Expr -> U -> K -> C
+eval1 :: Expr -> U -> ([E] -> C) -> C
+eval1 e u k = eval e u k
+eval2 :: Expr -> U -> ([E] -> S -> A) -> S -> A
+eval2 e u k s = eval e u k s
+eval3 :: Expr -> U -> ([E] -> State S A) -> State S A
+eval3 e u k = do
+  s <- get
+  let k' = com . evalState . k
+  pure (eval e u (com' . k') s)
+-- eval3 e u k = com (eval e u k')
+--   where
+--     f (a,b,c) = (b, c)
+--     k' :: [E] -> S -> A
+--     k' es s =
+    -- h :: ([E] -> State S A) -> K
+    -- -- K = [E] -> C = [E] -> S -> A
+    -- h f es s = _
+    -- k' :: [E] -> State S A
+    -- k' = com . evalState . k
+    -- g s = (a,s')
+    --   where
+    --     (_,a,s') = eval e u k' s
+
+com :: (S -> A) -> State S A
+com f = state g
+  where
+    g :: S -> (A, S)
+    g s = (a,s')
+      where
+        a@(str,res,s') = f s
+com' :: State S A -> (S -> A)
+com' = evalState
+
+-- scheme :: (U -> K -> C) -> Scheme' [E]
+-- scheme f = Scheme g
+--   where
+--     g :: ReaderT U (ContT K (State S)) [E]
+--     g = reader h
+--     h :: U -> [E]
+--     h u = []
+
+
+-- scheme f = Scheme (\e ->  (ReaderT
+--    (\ l
+--       -> ContT
+--            )))
+
+
 
 eval :: Expr -> U -> K -> C
 eval (Const a) p k = send (Ek a) k
