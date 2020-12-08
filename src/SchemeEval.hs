@@ -548,7 +548,7 @@ idKCont :: [E] -> S -> A
 idKCont e s = (Just e, s)
 
 -- |Evaluate an expression with the standard environment and store.
-evalStd prog = eval prog stdEnv idKCont stdStore
+evalStd prog = (reify (reflect (eval prog))) stdEnv idKCont stdStore
 
 -- |The standard environment
 stdEnv :: U
