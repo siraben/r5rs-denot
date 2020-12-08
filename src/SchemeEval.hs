@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -11,73 +12,66 @@ import SchemeTypes
 import qualified Data.IntMap as M
 import Control.Monad.Reader
 import Control.Monad.Cont
+import Control.Monad.Trans.Maybe
 import Control.Monad.State
+import Data.Function
 
-newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (State s)) a }
-                 deriving (Functor, Applicative, Monad, MonadReader u,  MonadCont)
+newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (MaybeT (State s))) a }
+                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont)
 
-type Scheme' a = Scheme U K S a
+type Scheme' a = Scheme U [E] S a
 {-
 eval :: Expr -> U -> K -> C
      = Expr -> U -> ([E] -> C) -> C
      = Expr -> U -> ([E] -> S -> A) -> S -> A
-     ~ Expr -> U -> ([E] -> State S A) -> State S A
-     ~ Expr -> U -> ContT [E] (State S A)
-     ~ Expr -> Reader U (ContT [E] (State S A))
-
-
+     = Expr -> U -> ([E] -> S -> (Maybe [E], S)) -> S -> (Maybe [E], S)
+     ~ Expr -> U -> ([E] -> MaybeT (State S) [E]) -> MaybeT (State S) [E]
+     ~ Expr -> U -> ContT [E] (MaybeT (State S)) [E]
+     ~ Expr -> Reader U (ContT [E] (MaybeT (State S)) [E])
 -}
 
 
---    :: Expr -> U -> K -> C
+-- _  :: Expr -> U -> K -> C
 eval1 :: Expr -> U -> ([E] -> C) -> C
-eval1 e u k = eval e u k
+eval1 = eval
 eval2 :: Expr -> U -> ([E] -> S -> A) -> S -> A
-eval2 e u k s = eval e u k s
-eval3 :: Expr -> U -> ([E] -> State S A) -> State S A
-eval3 e u k = do
-  s <- get
-  let k' = com . evalState . k
-  pure (eval e u (com' . k') s)
--- eval3 e u k = com (eval e u k')
---   where
---     f (a,b,c) = (b, c)
---     k' :: [E] -> S -> A
---     k' es s =
-    -- h :: ([E] -> State S A) -> K
-    -- -- K = [E] -> C = [E] -> S -> A
-    -- h f es s = _
-    -- k' :: [E] -> State S A
-    -- k' = com . evalState . k
-    -- g s = (a,s')
-    --   where
-    --     (_,a,s') = eval e u k' s
+eval2 = eval1
+eval2' :: Expr -> U -> ([E] -> S -> (Maybe [E], S)) -> S -> (Maybe [E], S)
+eval2' = eval2
+eval3 :: Expr -> U -> ([E] -> State S (Maybe [E])) -> State S (Maybe [E])
+eval3 e u k = state (eval2 e u (runState . k))
+eval3' :: Expr -> U -> ([E] -> MaybeT (State S) [E]) -> MaybeT (State S) [E]
+eval3' e u k = MaybeT (eval3 e u (runMaybeT . k))
+eval4 :: Expr -> U -> ContT [E] (MaybeT (State S)) [E]
+eval4 e u = ContT (eval3' e u)
+eval5 :: Expr -> ReaderT U (ContT [E] (MaybeT (State S))) [E]
+eval5 e = ReaderT (eval4 e)
+eval6 :: Expr -> Scheme' [E]
+eval6 = Scheme . eval5
 
-com :: (S -> A) -> State S A
-com f = state g
-  where
-    g :: S -> (A, S)
-    g s = (a,s')
-      where
-        a@(str,res,s') = f s
-com' :: State S A -> (S -> A)
-com' = evalState
+-- Combine into one expression
+reflect
+  :: (u -> (a -> s -> (Maybe k, s)) -> s -> (Maybe k, s))
+     -> Scheme u k s a
+reflect act = Scheme (ReaderT (\u -> ContT (\k -> MaybeT (state (act u (runState . (runMaybeT . k)))))))
 
--- scheme :: (U -> K -> C) -> Scheme' [E]
--- scheme f = Scheme g
---   where
---     g :: ReaderT U (ContT K (State S)) [E]
---     g = reader h
---     h :: U -> [E]
---     h u = []
-
-
--- scheme f = Scheme (\e ->  (ReaderT
---    (\ l
---       -> ContT
---            )))
-
-
+reify
+  :: Scheme u k s a
+     -> u -> (a -> s -> (Maybe k, s)) -> s -> (Maybe k, s)
+reify f r k s = f
+              & unScheme
+              & (`runReaderT` r)
+              & (`runContT` (MaybeT . state . k))
+              & runMaybeT
+              & (`runState` s)
+{-
+λ> reify . reflect
+reify . reflect
+  :: (u -> (a -> s -> (Maybe k, s)) -> s -> (Maybe k, s))
+     -> u -> (a -> s -> (Maybe k, s)) -> s -> (Maybe k, s)
+λ> reflect . reify
+reflect . reify :: Scheme u k s a -> Scheme u k s a
+-}
 
 eval :: Expr -> U -> K -> C
 eval (Const a) p k = send (Ek a) k
@@ -166,7 +160,7 @@ send e k = k [e]
 
 -- |Raise an error.
 wrong :: X -> C
-wrong x p = (x, Nothing, p)
+wrong x p = (Nothing, p)
 
 -- |Given a location, look it up in the store and send it to the
 -- continuation.
@@ -452,9 +446,9 @@ numberToString = onearg
       (Ek (Number n)) -> send (Ek (String (show n)))
       x -> \_ -> wrong ("non-numeric argument to number->string: " <> show x))
 
-valueStdExtract (_, Nothing, _) =
+valueStdExtract (Nothing, _) =
   error "Failed to extract value from expression"
-valueStdExtract (_, Just a, _) = head a
+valueStdExtract (Just a, _) = head a
 
 liftExpr = applicate . valueStdExtract . evalStd
 
@@ -465,7 +459,7 @@ reval :: String -> A
 reval s =
   case readProg s of
     Right res -> evalStd res
-    Left err  -> ("Error: " <> show err, Nothing, emptyStore)
+    Left err  -> (Nothing, emptyStore)
 
 -- |Parse a string into an expression.
 rparse :: String -> Expr
@@ -551,7 +545,7 @@ takefirst = take
 
 -- |The "normal" continuation.
 idKCont :: [E] -> S -> A
-idKCont e s = ("", Just e, s)
+idKCont e s = (Just e, s)
 
 -- |Evaluate an expression with the standard environment and store.
 evalStd prog = eval prog stdEnv idKCont stdStore
