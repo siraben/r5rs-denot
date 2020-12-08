@@ -14,8 +14,8 @@ import System.IO
 -- |Print the contents of a value of type 'Result' 'Val', or an error
 -- message.
 reportResult :: A -> IO ()
-reportResult (a, Nothing, s) = putStrLn $ "Error: " ++ a
-reportResult (a, Just e, s) =
+reportResult (Nothing, s) = putStrLn $ "Error: "
+reportResult (Just e, s) =
   let memusage = (new s - length builtInOps - length exprDefinedOps - 2)
       pluralize s x =
         s ++
@@ -23,10 +23,7 @@ reportResult (a, Just e, s) =
           then "s"
           else ""
    in do mapM_ putStrLn ((`showFull` s) <$> e)
-         mapM_ putStrLn
-                 [ if a == "" then "No errors" else "Errors: " <> a
-                 , "Memory used: " <> show memusage <> pluralize " cell" memusage
-                 ]
+         putStrLn $ "Memory used: " <> show memusage <> pluralize " cell" memusage
 
 -- |The main REPL loop.
 repl :: IO ()
