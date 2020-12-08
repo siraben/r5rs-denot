@@ -73,7 +73,7 @@ reify . reflect
 reflect . reify :: Scheme u k s a -> Scheme u k s a
 -}
 
-evalM (Const a) = do
+evalM (Const a) =
   sendM (Ek a)
 evalM (Id i) = do
   p <- ask
@@ -96,41 +96,36 @@ evalM (IfPartial e0 e1) = do
   if truish e
     then evalM e1
     else sendM (Em Unspecified)
--- evalM (Lambda is g e0)  =
--- evalM (LambdaV is i gs e0) =
-evalM (Set i e) = do
-  [e] <- evalM e
+evalM (Lambda is g e0) = do
+  s <- get
   p <- ask
-  modify (update (envLookup p i) e)
-  sendM (Em Unspecified)
-
-evalM e = reflect (eval e)
-
-eval :: Expr -> U -> K -> C
--- eval (App e0 e) p k =
---   evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
-eval (Lambda is g e0) p k =
-  \s ->
-    send
-      (Ef
-         ( new s
-         , \es k' ->
-             if length es == length is
-               then tievals
-                      ((\p' -> evalc g p' (eval e0 p' k')) . extends p is)
-                      es
-               else wrong
-                      ("wrong number of arguments, expected " <>
-                       show (length is) <>
-                       ", namely " <>
-                       show is <> " but got " <> show (length es) <> " instead")))
-      k
-      (update (new s) (Em Unspecified) s)
-eval (LambdaV is i gs e0) p k =
-  \s ->
-    send
-      (Ef
-         ( new s
+  let l = new s
+  sendM
+    ( Ef
+        ( l,
+          \es k' ->
+            if length es == length is
+              then
+                tievals
+                  ((\p' -> evalc g p' (eval e0 p' k')) . extends p is)
+                  es
+              else
+                wrong
+                  ( "wrong number of arguments, expected "
+                      <> show (length is)
+                      <> ", namely "
+                      <> show is
+                      <> " but got "
+                      <> show (length es)
+                      <> " instead"
+                  )))
+evalM (LambdaV is i gs e0) = do
+  s <- get
+  p <- ask
+  let l = new s
+  sendM
+    (Ef
+         ( l
          , \es k' ->
              if length es >= length is
                then tievalsrest
@@ -141,10 +136,15 @@ eval (LambdaV is i gs e0) p k =
                else wrong
                       ("too few arguments, expected at least " <>
                        show (length is) <> ", namely " <> show is)))
-      k
-      (update (new s) (Em Unspecified) s)
-eval (LambdaVV i gs e0) p k = eval (LambdaV [] i gs e0) p k
-eval e p k = reify (evalM e) p k
+evalM (LambdaVV i gs e0) = evalM (LambdaV [] i gs e0)
+evalM (Set i e) = do
+  [e] <- evalM e
+  p <- ask
+  modify (update (envLookup p i) e)
+  sendM (Em Unspecified)
+
+eval :: Expr -> U -> K -> C
+eval = reify . evalM
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
@@ -200,7 +200,7 @@ single f es
     wrong
       ("wrong number of return values, expected 1 but got " <> show (length es))
 
-singleM es = do
+singleM es =
   if length es == 1
     then pure (head es)
     else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
@@ -545,6 +545,17 @@ valueslist =
 tievals :: ([L] -> C) -> [E] -> C
 tievals f [] s     = f [] s
 tievals f (e:es) s = tievals (\as -> f (new s : as)) es (update (new s) e s)
+
+-- tievals :: ([L] -> S -> A) -> [E] -> S -> A
+tievalsM f l s = reflect (const (const (tievals f l)))
+-- tievalsM f l s = do
+--   newLocs <- traverse (\e -> update <$> gets new <*> pure e) l
+
+--   -- forM_ l (\e -> do
+--   --             l <- gets new
+--   --             modify (update l e)
+--   --             )
+--   pure ()
 
 -- |Scheme @call-with-current-continuation@
 callcc :: [E] -> K -> C
