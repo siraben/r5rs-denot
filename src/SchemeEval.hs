@@ -98,41 +98,39 @@ evalM (Lambda is γ e0) = do
   σ <- get
   ρ <- ask
   let α = new σ
-  sendM
-    ( Ef
-        ( α,
-          \εs κ' ->
-            if length εs == length is
-              then
-                tievals
-                  ((\ρ' -> evalc γ ρ' (eval e0 ρ' κ')) . extends ρ is)
-                  εs
-              else
-                wrong
-                  ( "wrong number of arguments, expected "
-                      <> show (length is)
-                      <> ", namely "
-                      <> show is
-                      <> " but got "
-                      <> show (length εs)
-                      <> " instead"
-                  )))
+  sendM (Ef (α, ϕ ρ))
+  where
+    ϕ ρ = \εs κ' ->
+      if length εs == length is
+        then
+          tievals
+            ((\ρ' -> evalc γ ρ' (eval e0 ρ' κ')) . extends ρ is)
+            εs
+        else
+          wrong
+            ( "wrong number of arguments, expected "
+                <> show (length is)
+                <> ", namely "
+                <> show is
+                <> " but got "
+                <> show (length εs)
+                <> " instead"
+            )
 evalM (LambdaV is i gs e0) = do
   σ <- get
   ρ <- ask
   let α = new σ
-  sendM
-    (Ef
-         ( α
-         , \εs κ' ->
-             if length εs >= length is
-               then tievalsrest
-                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) . extends ρ (is <> [i]))
-                      (length is)
-                      εs
-               else wrong
-                      ("too few arguments, expected at least " <>
-                       show (length is) <> ", namely " <> show is)))
+  sendM (Ef (α, ϕ ρ))
+  where
+    ϕ ρ = \εs κ' ->
+      if length εs >= length is
+        then tievalsrest
+               ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) . extends ρ (is <> [i]))
+               (length is)
+               εs
+        else wrong
+               ("too few arguments, expected at least " <>
+                show (length is) <> ", namely " <> show is)
 evalM (LambdaVV i gs e0) = evalM (LambdaV [] i gs e0)
 evalM (Set i e) = do
   [ε] <- evalM e
@@ -145,18 +143,17 @@ eval = reify . evalM
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
-evals :: [Expr] -> U -> K -> C
-evals [] _ κ = κ []
-evals (e0:es) ρ κ = eval e0 ρ $ single $ \e0 -> evals es ρ $ \es -> κ (e0 : es)
-
 evalsM :: [Expr] -> Scheme U [E] S [E]
--- evalsM = mapM evalM
 evalsM = mapM (singleM <=< evalM)
 
 -- |Evaluate a list of commands, returning to the continuation.
 evalc :: [Expr] -> U -> C -> C
 evalc [] ρ θ      = θ
 evalc (g0:gs) ρ θ = eval g0 ρ $ \es -> evalc gs ρ θ
+
+-- untested
+evalcM :: [Expr] -> U -> Scheme' ()
+evalcM γ ρ = mapM_ (\ε -> local (const ρ) (evalM ε)) γ
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
