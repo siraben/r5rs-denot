@@ -116,7 +116,7 @@ type C = S -> A
 type K = [E] -> C
 
 -- |Answer
-type A = (String, Maybe [E], S)
+type A = (Maybe [E], S)
 
 -- |Errors
 type X = String
