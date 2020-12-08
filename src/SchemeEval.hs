@@ -15,9 +15,10 @@ import Control.Monad.Cont
 import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Data.Function
+import Control.Monad.Fail
 
 newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (MaybeT (State s))) a }
-                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont)
+                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont, MonadFail)
 
 type Scheme' a = Scheme U [E] S a
 {-
@@ -73,23 +74,24 @@ reify . reflect
 reflect . reify :: Scheme u k s a -> Scheme u k s a
 -}
 
+evalM (Const a) = do
+  sendM (Ek a)
+evalM (Id i) = do
+  ρ <- ask
+  [ε] <- holdM (envLookup ρ i)
+  case ε of
+    Em Undefined -> wrongM ("Undefined variable: " <> i)
+    ε' -> sendM ε'
+evalM (If ε0 ε1 ε2) = do
+  [ε] <- evalM ε0
+  if truish ε
+    then evalM ε1
+    else evalM ε2
+evalM e = reflect (eval e)
+
 eval :: Expr -> U -> K -> C
-eval (Const a) ρ κ = send (Ek a) κ
-eval (Id i) ρ κ =
-  hold
-    (envLookup ρ i)
-    (single
-       (\case
-          Em Undefined -> wrong ("Undefined variable: " <> i)
-          e -> send e κ))
 eval (App e0 e) ρ κ =
   evals (permute (e0 : e)) ρ ((\(e:es) -> applicate e es κ) . unpermute)
-eval (If ε0 ε1 ε2) ρ κ =
-  eval ε0 ρ $
-  single $ \e ->
-    if truish e
-      then eval ε1 ρ κ
-      else eval ε2 ρ κ
 eval (IfPartial ε0 ε1) ρ κ =
   eval ε0 ρ $
   single $ \e ->
@@ -133,6 +135,7 @@ eval (LambdaV is i gs e0) ρ κ =
 eval (LambdaVV i gs e0) ρ κ = eval (LambdaV [] i gs e0) ρ κ
 eval (Set i e) ρ κ =
   eval e ρ $ single $ \e -> assign (envLookup ρ i) e (send (Em Unspecified) κ)
+eval e ρ κ = reify (evalM e) ρ κ
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
@@ -158,14 +161,25 @@ extends ρ is αs = zip is αs <> ρ
 send :: E -> K -> C
 send ε κ = κ [ε]
 
+sendM e = pure [e]
+
 -- |Raise an error.
 wrong :: X -> C
 wrong χ ρ = (Nothing, ρ)
+
+wrongM :: MonadFail m => String -> m a
+wrongM = fail
 
 -- |Given a location, look it up in the store and send it to the
 -- continuation.
 hold :: L -> K -> C
 hold α κ σ@(c, m) = send (fst (m M.! α)) κ σ
+
+-- holdM :: L -> Scheme' [E]
+-- holdM a = do
+--   (c,m) <- get
+--   sendM (fst (m M.! a))
+holdM l = reflect (const (hold l))
 
 single :: (E -> C) -> K
 single ϕ es
@@ -173,6 +187,12 @@ single ϕ es
   | otherwise =
     wrong
       ("wrong number of return values, expected 1 but got " <> show (length es))
+
+singleM f = do
+  es <- ask
+  if length es == 1
+    then f (head es)
+    else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -548,7 +568,7 @@ idKCont :: [E] -> S -> A
 idKCont ε σ = (Just ε, σ)
 
 -- |Evaluate an expression with the standard environment and store.
-evalStd prog = (reify (reflect (eval prog))) stdEnv idKCont stdStore
+evalStd prog = reify (reflect (eval prog)) stdEnv idKCont stdStore
 
 -- |The standard environment
 stdEnv :: U
