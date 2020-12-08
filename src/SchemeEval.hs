@@ -100,25 +100,24 @@ evalM (Lambda is g e0) = do
   s <- get
   p <- ask
   let l = new s
-  sendM
-    ( Ef
-        ( l,
-          \es k' ->
-            if length es == length is
-              then
-                tievals
-                  ((\p' -> evalc g p' (eval e0 p' k')) . extends p is)
-                  es
-              else
-                wrong
-                  ( "wrong number of arguments, expected "
-                      <> show (length is)
-                      <> ", namely "
-                      <> show is
-                      <> " but got "
-                      <> show (length es)
-                      <> " instead"
-                  )))
+  sendM (Ef (l, f p))
+  where
+    f p = \es k' ->
+      if length es == length is
+        then
+          tievals
+            ((\p' -> evalc g p' (eval e0 p' k')) . extends p is)
+            es
+        else
+          wrong
+            ( "wrong number of arguments, expected "
+                <> show (length is)
+                <> ", namely "
+                <> show is
+                <> " but got "
+                <> show (length es)
+                <> " instead"
+            )
 evalM (LambdaV is i gs e0) = do
   s <- get
   p <- ask
@@ -126,7 +125,9 @@ evalM (LambdaV is i gs e0) = do
   sendM
     (Ef
          ( l
-         , \es k' ->
+         , f p))
+  where
+    f p = \es k' ->
              if length es >= length is
                then tievalsrest
                       ((\p' -> evalc gs p' (eval e0 p' k')) .
@@ -135,7 +136,7 @@ evalM (LambdaV is i gs e0) = do
                       es
                else wrong
                       ("too few arguments, expected at least " <>
-                       show (length is) <> ", namely " <> show is)))
+                       show (length is) <> ", namely " <> show is)
 evalM (LambdaVV i gs e0) = evalM (LambdaV [] i gs e0)
 evalM (Set i e) = do
   [e] <- evalM e
@@ -148,18 +149,17 @@ eval = reify . evalM
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
-evals :: [Expr] -> U -> K -> C
-evals [] _ k = k []
-evals (e0:es) p k = eval e0 p $ single $ \e0 -> evals es p $ \es -> k (e0 : es)
-
 evalsM :: [Expr] -> Scheme U [E] S [E]
--- evalsM = mapM evalM
 evalsM = mapM (singleM <=< evalM)
 
 -- |Evaluate a list of commands, returning to the continuation.
 evalc :: [Expr] -> U -> C -> C
 evalc [] p θ      = θ
 evalc (g0:gs) p θ = eval g0 p $ \es -> evalc gs p θ
+
+-- untested
+evalcM :: [Expr] -> U -> Scheme' ()
+evalcM l u = mapM_ (\p -> local (const u) (evalM p)) l
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
