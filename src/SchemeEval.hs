@@ -15,10 +15,9 @@ import Control.Monad.Cont
 import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Data.Function
-import Control.Monad.Fail
 
 newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (MaybeT (State s))) a }
-                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont, MonadFail)
+                 deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail)
 
 type Scheme' a = Scheme U [E] S a
 {-
@@ -78,41 +77,39 @@ evalM (Const a) = do
   sendM (Ek a)
 evalM (Id i) = do
   p <- ask
-  [r] <- holdM (envLookup p i)
+  r <- singleM =<< holdM (envLookup p i)
   case r of
     Em Undefined -> wrongM ("Undefined variable: " <> i)
     e -> sendM e
+
+evalM (App e0 e) = do
+  (e:es) <- evalsM (e0 : e)
+  applicateM e es
+
 evalM (If e0 e1 e2) = do
-  [e] <- evalM e0
+  e <- singleM =<< evalM e0
   if truish e
     then evalM e1
     else evalM e2
+evalM (IfPartial e0 e1) = do
+  e <- singleM =<< evalM e0
+  if truish e
+    then evalM e1
+    else sendM (Em Unspecified)
+-- evalM (Lambda is g e0)  =
+-- evalM (LambdaV is i gs e0) =
+evalM (Set i e) = do
+  [e] <- evalM e
+  p <- ask
+  modify (update (envLookup p i) e)
+  sendM (Em Unspecified)
+
 evalM e = reflect (eval e)
 
 eval :: Expr -> U -> K -> C
--- eval (Const a) p k = send (Ek a) k
--- eval (Id i) p k =
---   hold
---     (envLookup p i)
---     (single
---        (\case
---           Em Undefined -> wrong ("Undefined variable: " <> i)
---           e -> send e k))
-eval (App e0 e) p k =
-  evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
--- eval (If e0 e1 e2) p k =
---   eval e0 p $
---   single $ \e ->
---     if truish e
---       then eval e1 p k
---       else eval e2 p k
-eval (IfPartial e0 e1) p k =
-  eval e0 p $
-  single $ \e ->
-    if truish e
-      then eval e1 p k
-      else send (Em Unspecified) k
-eval (Lambda is γ e0) p k =
+-- eval (App e0 e) p k =
+--   evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
+eval (Lambda is g e0) p k =
   \s ->
     send
       (Ef
@@ -120,7 +117,7 @@ eval (Lambda is γ e0) p k =
          , \es k' ->
              if length es == length is
                then tievals
-                      ((\p' -> evalc γ p' (eval e0 p' k')) . extends p is)
+                      ((\p' -> evalc g p' (eval e0 p' k')) . extends p is)
                       es
                else wrong
                       ("wrong number of arguments, expected " <>
@@ -147,8 +144,6 @@ eval (LambdaV is i gs e0) p k =
       k
       (update (new s) (Em Unspecified) s)
 eval (LambdaVV i gs e0) p k = eval (LambdaV [] i gs e0) p k
-eval (Set i e) p k =
-  eval e p $ single $ \e -> assign (envLookup p i) e (send (Em Unspecified) k)
 eval e p k = reify (evalM e) p k
 
 -- |Evaluate a list of expressions, sending the collected result to
@@ -156,6 +151,10 @@ eval e p k = reify (evalM e) p k
 evals :: [Expr] -> U -> K -> C
 evals [] _ k = k []
 evals (e0:es) p k = eval e0 p $ single $ \e0 -> evals es p $ \es -> k (e0 : es)
+
+evalsM :: [Expr] -> Scheme U [E] S [E]
+-- evalsM = mapM evalM
+evalsM = mapM (singleM <=< evalM)
 
 -- |Evaluate a list of commands, returning to the continuation.
 evalc :: [Expr] -> U -> C -> C
@@ -189,11 +188,10 @@ wrongM = fail
 hold :: L -> K -> C
 hold a k s@(c, m) = send (fst (m M.! a)) k s
 
--- holdM :: L -> Scheme' [E]
--- holdM a = do
---   (c,m) <- get
---   sendM (fst (m M.! a))
-holdM l = reflect (const (hold l))
+holdM :: L -> Scheme' [E]
+holdM a = do
+  (c,m) <- get
+  sendM (fst (m M.! a))
 
 single :: (E -> C) -> K
 single f es
@@ -202,10 +200,9 @@ single f es
     wrong
       ("wrong number of return values, expected 1 but got " <> show (length es))
 
-singleM f = do
-  es <- ask
+singleM es = do
   if length es == 1
-    then f (head es)
+    then pure (head es)
     else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
 
 -- |Given the store, return the next free cell.
@@ -247,6 +244,8 @@ applicate :: E -> [E] -> K -> C
 applicate (Ef e) es k = snd e es k
 applicate x _ _ =
   wrong ("failed to apply " <> show x <> ", expected a procedure")
+
+applicateM f es = reflect (const (applicate f es))
 
 -- |Lift a Haskell function that takes one argument into a
 -- Scheme procedure.
