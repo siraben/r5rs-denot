@@ -15,9 +15,10 @@ import Control.Monad.Cont
 import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Data.Function
+import Control.Monad.Fail
 
 newtype Scheme u k s a = Scheme { unScheme :: ReaderT u (ContT k (MaybeT (State s))) a }
-                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont)
+                 deriving (Functor, Applicative, Monad, MonadReader u, MonadCont, MonadFail)
 
 type Scheme' a = Scheme U [E] S a
 {-
@@ -73,23 +74,38 @@ reify . reflect
 reflect . reify :: Scheme u k s a -> Scheme u k s a
 -}
 
+evalM (Const a) = do
+  sendM (Ek a)
+evalM (Id i) = do
+  p <- ask
+  [r] <- holdM (envLookup p i)
+  case r of
+    Em Undefined -> wrongM ("Undefined variable: " <> i)
+    e -> sendM e
+evalM (If e0 e1 e2) = do
+  [e] <- evalM e0
+  if truish e
+    then evalM e1
+    else evalM e2
+evalM e = reflect (eval e)
+
 eval :: Expr -> U -> K -> C
-eval (Const a) p k = send (Ek a) k
-eval (Id i) p k =
-  hold
-    (envLookup p i)
-    (single
-       (\case
-          Em Undefined -> wrong ("Undefined variable: " <> i)
-          e -> send e k))
+-- eval (Const a) p k = send (Ek a) k
+-- eval (Id i) p k =
+--   hold
+--     (envLookup p i)
+--     (single
+--        (\case
+--           Em Undefined -> wrong ("Undefined variable: " <> i)
+--           e -> send e k))
 eval (App e0 e) p k =
   evals (permute (e0 : e)) p ((\(e:es) -> applicate e es k) . unpermute)
-eval (If e0 e1 e2) p k =
-  eval e0 p $
-  single $ \e ->
-    if truish e
-      then eval e1 p k
-      else eval e2 p k
+-- eval (If e0 e1 e2) p k =
+--   eval e0 p $
+--   single $ \e ->
+--     if truish e
+--       then eval e1 p k
+--       else eval e2 p k
 eval (IfPartial e0 e1) p k =
   eval e0 p $
   single $ \e ->
@@ -133,6 +149,7 @@ eval (LambdaV is i gs e0) p k =
 eval (LambdaVV i gs e0) p k = eval (LambdaV [] i gs e0) p k
 eval (Set i e) p k =
   eval e p $ single $ \e -> assign (envLookup p i) e (send (Em Unspecified) k)
+eval e p k = reify (evalM e) p k
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
@@ -158,14 +175,25 @@ extends p is as = zip is as <> p
 send :: E -> K -> C
 send e k = k [e]
 
+sendM e = pure [e]
+
 -- |Raise an error.
 wrong :: X -> C
 wrong x p = (Nothing, p)
+
+wrongM :: MonadFail m => String -> m a
+wrongM = fail
 
 -- |Given a location, look it up in the store and send it to the
 -- continuation.
 hold :: L -> K -> C
 hold a k s@(c, m) = send (fst (m M.! a)) k s
+
+-- holdM :: L -> Scheme' [E]
+-- holdM a = do
+--   (c,m) <- get
+--   sendM (fst (m M.! a))
+holdM l = reflect (const (hold l))
 
 single :: (E -> C) -> K
 single f es
@@ -173,6 +201,12 @@ single f es
   | otherwise =
     wrong
       ("wrong number of return values, expected 1 but got " <> show (length es))
+
+singleM f = do
+  es <- ask
+  if length es == 1
+    then f (head es)
+    else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -548,7 +582,7 @@ idKCont :: [E] -> S -> A
 idKCont e s = (Just e, s)
 
 -- |Evaluate an expression with the standard environment and store.
-evalStd prog = (reify (reflect (eval prog))) stdEnv idKCont stdStore
+evalStd prog = reify (reflect (eval prog)) stdEnv idKCont stdStore
 
 -- |The standard environment
 stdEnv :: U
