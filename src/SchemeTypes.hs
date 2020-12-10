@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-|
 Module      : SchemeTypes
 Description : Datatypes of r5rs-denot.
@@ -8,6 +10,9 @@ module SchemeTypes where
 
 import qualified Data.IntMap as M
 import Data.List.NonEmpty
+import Control.Monad.Reader
+import Control.Monad.Cont
+import Control.Monad.State
 
 -- |Locations
 type L = Int
@@ -166,3 +171,8 @@ data Defn = Defn1 Ide Expr
 data Body = Body [Defn] [Com] Expr
 
 type Program = NonEmpty (Either Com Defn)
+
+newtype Scheme m u r s a = Scheme {unScheme :: ReaderT u (StateT s (ContT r m)) a}
+  deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail, MonadIO)
+
+type Scheme' a = Scheme Maybe U A S a
