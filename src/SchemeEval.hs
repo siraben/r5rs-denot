@@ -212,8 +212,8 @@ sendM e = pure [e]
 wrong :: X -> C
 wrong x p = error x
 
-wrongM :: MonadFail m => String -> m a
-wrongM = fail
+-- wrongM :: MonadFail m => String -> m a
+wrongM s = error s
 
 -- |Given a location, look it up in the store and send it to the
 -- continuation.
@@ -285,6 +285,10 @@ onearg :: (E -> K -> C) -> [E] -> K -> C
 onearg ζ [e] k = ζ e k
 onearg _ a _ =
   wrong ("wrong number of arguments, expected 1 but got " <> show (length a))
+
+oneargM z [e] = z =<< e
+oneargM _ a =
+  wrongM ("wrong number of arguments, expected 1 but got " <> show (length a))
 
 -- |Lift a Haskell function that takes two arguments into a Scheme
 -- procedure.
@@ -378,7 +382,10 @@ sdiv = makeNumBinop "div" (Ek . Number) div
 
 -- |Scheme @car@
 car :: [E] -> K -> C
-car =
+car = reify' (Scheme (ReaderT (\u -> StateT (ContT . g u))))
+  where
+    g u s k = car' u (\a s -> (curry k a s)) s
+car' =
   onearg
     (\case
        (Ep (a, _, _)) -> hold a
