@@ -33,7 +33,6 @@ eval3 :: Expr -> U -> ([E] -> S -> Identity A) -> S -> Identity A
 eval4 :: Expr -> U -> (StateT S (ContT A Identity)) [E]
 eval5 :: Expr -> ReaderT U (StateT S (ContT A Identity)) [E]
 
-
 eval1 = eval
 
 eval2 = eval1
@@ -47,8 +46,11 @@ eval5 e = ReaderT (eval4 e)
 eval6 e = Scheme (eval5 e)
 
 -- Combine into one expression
-reflect :: (u -> (a -> s -> r) -> s -> r) -> Scheme Maybe u r s a
-reflect f = Scheme (ReaderT (\u -> StateT (\s -> ContT (\k -> Just (f u (\es s -> fromJust (curry k es s)) s)))))
+reflect :: forall u r s a. (u -> (a -> s -> r) -> s -> r) -> Scheme Maybe u r s a
+reflect f = Scheme (ReaderT (\u -> StateT (ContT . g u)))
+  where
+    g u s k = pure (f u (\a s -> fromJust (curry k a s)) s)
+
 
 reify :: Scheme Maybe u r s a -> u -> (a -> s -> r) -> s -> r
 reify f r k s = f
@@ -150,7 +152,7 @@ evalc (g0:gs) p θ = eval g0 p $ \es -> evalc gs p θ
 
 -- untested
 evalcM :: [Expr] -> U -> Scheme' ()
-evalcM l u = mapM_ (\p -> local (const u) (evalM p)) l
+evalcM l u = mapM_ (local (const u) . evalM) l
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
@@ -169,7 +171,7 @@ sendM e = pure [e]
 
 -- |Raise an error.
 wrong :: X -> C
-wrong x p = error "implementation-dependent"
+wrong x p = error x
 
 wrongM :: MonadFail m => String -> m a
 wrongM = fail
