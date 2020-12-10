@@ -71,9 +71,18 @@ reify' f r k s = f
               & (`runStateT` s)
               & (`runContT` uncurry k)
 
+runScheme f = f
+            & unScheme
+            & (`runReaderT` stdEnv)
+            & (`runStateT` emptyStore)
+            & (`runContT` pure)
 
 sputChar :: MonadIO m => Char -> Scheme m u r s ()
-sputChar c = liftIO (putChar c)
+sputChar = liftIO . putChar
+
+sputStrLn :: MonadIO m => String -> Scheme m u r s ()
+sputStrLn = liftIO . putStrLn
+
 {-
 λ> reify . reflect
 reify . reflect
