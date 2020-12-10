@@ -15,9 +15,9 @@ import Data.Function
 import Control.Monad.Identity
 
 newtype Scheme m u r s a = Scheme {unScheme :: ReaderT u (StateT s (ContT r m)) a}
-  deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail)
+  deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail, MonadIO)
 
-type Scheme' a = Scheme Maybe U [E] S a
+type Scheme' a = Scheme Maybe U A S a
 {-
 eval :: Expr -> U -> K -> C
      = Expr -> U -> ([E] -> C) -> C
@@ -72,6 +72,8 @@ reify' f r k s = f
               & (`runContT` uncurry k)
 
 
+sputChar :: MonadIO m => Char -> Scheme m u r s ()
+sputChar c = liftIO (putChar c)
 {-
 λ> reify . reflect
 reify . reflect
@@ -88,7 +90,7 @@ reflect' . reify'
   :: Monad m => Scheme m u r s a -> Scheme m u r s a
 -}
 
-evalM :: Expr -> Scheme Maybe U [E] S [E]
+evalM :: Expr -> Scheme' [E]
 evalM (Const a) =
   sendM (Ek a)
 evalM (Id i) = do
@@ -172,10 +174,11 @@ evalsM = mapM (singleM <=< evalM)
 evalc :: [Expr] -> U -> C -> C
 evalc [] ρ θ      = θ
 evalc (g0:gs) ρ θ = eval g0 ρ $ \es -> evalc gs ρ θ
+-- evalc γ ρ = reify (evalcM γ ρ) ρ
 
 -- untested
 evalcM :: [Expr] -> U -> Scheme' ()
-evalcM γ ρ = mapM_ (local (const ρ) . evalM) γ
+evalcM γ ρ = mapM_ (\ε -> local (const ρ) (evalM ε)) γ
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
@@ -495,7 +498,7 @@ numberToString = onearg
       (Ek (Number n)) -> send (Ek (String (show n)))
       χ -> \_ -> wrong ("non-numeric argument to number->string: " <> show χ))
 
-liftExpr = applicate . head . evalStd
+liftExpr = applicate . head . fst . evalStd
 
 liftString = liftExpr . rparse
 
@@ -601,7 +604,7 @@ takefirst = take
 
 -- |The "normal" continuation.
 idKCont :: [E] -> S -> A
-idKCont ε σ = ε
+idKCont εs σ = (εs, σ)
 
 -- |Evaluate an expression with the standard environment and store.
 evalStd :: Expr -> A
@@ -611,9 +614,11 @@ evalStd prog = reify' (reflect' (eval prog)) stdEnv idKCont stdStore
 stdEnv :: U
 stdEnv = zip stdEnvNames [1 ..]
 
+exprDefinedOps :: [(String, [E] -> K -> C)]
 exprDefinedOps = [("recursive", recursive)]
 
 -- |The list of built-in operations.
+builtInOps :: [(String, [E] -> K -> C)]
 builtInOps =
   [ ("+", add)
   , ("*", mult)

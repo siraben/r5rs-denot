@@ -117,7 +117,7 @@ type C = S -> A
 type K = [E] -> C
 
 -- |Answer
-type A = [E]
+type A = ([E],S)
 
 -- |Errors
 type X = String
