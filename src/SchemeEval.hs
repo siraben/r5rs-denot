@@ -1,6 +1,13 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures -fdefer-typed-holes -fno-warn-unused-imports -fdefer-type-errors #-}
 
 module SchemeEval where
 
@@ -11,13 +18,9 @@ import qualified Data.IntMap as M
 import Control.Monad.Reader
 import Control.Monad.Cont
 import Control.Monad.State
-import Data.Function
 import Control.Monad.Identity
+import Data.Function
 
-newtype Scheme m u r s a = Scheme {unScheme :: ReaderT u (StateT s (ContT r m)) a}
-  deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail, MonadIO)
-
-type Scheme' a = Scheme Maybe U A S a
 {-
 eval :: Expr -> U -> K -> C
      = Expr -> U -> ([E] -> C) -> C
