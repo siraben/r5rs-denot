@@ -49,8 +49,12 @@ eval6 e = Scheme (eval5 e)
 reflect :: forall u r s a. (u -> (a -> s -> r) -> s -> r) -> Scheme Maybe u r s a
 reflect f = Scheme (ReaderT (\u -> StateT (ContT . g u)))
   where
-    g u s k = pure (f u (\a s -> fromJust (curry k a s)) s)
+    g u s k = Just (f u (\a s -> fromJust (curry k a s)) s)
 
+reflect' :: Monad m => forall u r s a. (u -> (a -> s -> m r) -> s -> m r) -> Scheme m u r s a
+reflect' f = Scheme (ReaderT (\u -> StateT (ContT . g u)))
+  where
+    g u s k = f u (curry k) s
 
 reify :: Scheme Maybe u r s a -> u -> (a -> s -> r) -> s -> r
 reify f r k s = f
@@ -60,14 +64,31 @@ reify f r k s = f
               & (`runContT` (\(a,s) -> Just (k a s)))
               & fromJust
 
+reify' :: Monad m => Scheme m u r s a -> u -> (a -> s -> m r) -> s -> m r
+reify' f r k s = f
+              & unScheme
+              & (`runReaderT` r)
+              & (`runStateT` s)
+              & (`runContT` uncurry k)
+
+
 {-
 λ> reify . reflect
 reify . reflect
   :: (u -> (a -> s -> r) -> s -> r) -> u -> (a -> s -> r) -> s -> r
 λ> reflect . reify
 reflect . reify :: Scheme Maybe u r s a -> Scheme Maybe u r s a
+λ> reify' . reflect'
+reify' . reflect'
+  :: Monad m =>
+     (u -> (a -> s -> m r) -> s -> m r)
+     -> u -> (a -> s -> m r) -> s -> m r
+λ> reflect' . reify'
+reflect' . reify'
+  :: Monad m => Scheme m u r s a -> Scheme m u r s a
 -}
 
+evalM :: Expr -> Scheme Maybe U [E] S [E]
 evalM (Const a) =
   sendM (Ek a)
 evalM (Id i) = do
@@ -134,7 +155,13 @@ evalM (Set i e) = do
   sendM (Em Unspecified)
 
 eval :: Expr -> U -> K -> C
-eval = reify . evalM
+eval e = reify (evalM e)
+
+
+-- |Evaluate a list of expressions, sending the collected result to
+-- the continuation.
+evals :: [Expr] -> U -> K -> C
+evals = reify . evalsM
 
 -- |Evaluate a list of expressions, sending the collected result to
 -- the continuation.
@@ -532,7 +559,7 @@ tievals ϕ [] σ     = ϕ [] σ
 tievals ϕ (ε:εs) σ = tievals (\αs -> ϕ (new σ : αs)) εs (update (new σ) ε σ)
 
 -- tievals :: ([L] -> S -> A) -> [E] -> S -> A
-tievalsM f l s = reflect (const (const (tievals f l)))
+tievalsM f l s = reflect' (\_ _ s -> tievals f l s)
 -- tievalsM f l s = do
 --   newLocs <- traverse (\e -> update <$> gets new <*> pure e) l
 
@@ -578,7 +605,7 @@ idKCont ε σ = ε
 
 -- |Evaluate an expression with the standard environment and store.
 evalStd :: Expr -> A
-evalStd prog = reify (reflect (eval prog)) stdEnv idKCont stdStore
+evalStd prog = reify' (reflect' (eval prog)) stdEnv idKCont stdStore
 
 -- |The standard environment
 stdEnv :: U
