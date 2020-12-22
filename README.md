@@ -1,6 +1,10 @@
 # An interpreter for R5RS Scheme based on denotational semantics
 ![R5RS denotational semantics for evaluating lambdas](lambda-def.png)
 
+**Note:** monadic interpreter available at the
+[monad-transformers](https://github.com/siraben/r5rs-denot/tree/monad-transformers)
+branch.
+
 The R5RS Scheme specification is a 50-page beauty, outlining the
 syntax and semantics of Scheme in easy to understand prose, and
 concludes with a denotational semantics.  The semantics looks a lot
@@ -141,10 +145,13 @@ Memory used: 16142 cells
 - [ ] Vectors (using IntMap as representation)
 - [ ] Rewrite `eval` from a store-passing, continuation-passing
       interpreter to a monadic style
-  - Note: has been very difficult to combine effects due to the
-    intricacy of the semantics
-  - [ ] Inject the resulting monad into `IO`
+  - In progress: at [monad-transformers](https://github.com/siraben/r5rs-denot/tree/monad-transformers)
+    branch, Scheme monad `Scheme m u r s a` representing a Scheme
+    computation in environment `u`, store `s`, continuation `r`, over
+    monad `m` returning a value of type `a`
+  - [x] Inject `IO` computations into the Scheme monad
     - [ ] Implement ports, and user I/O
+- [ ] Automated test suite
       
 ## Limitations
 This is also a good example of the problems with "unstable
