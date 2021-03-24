@@ -5,6 +5,14 @@
 [monad-transformers](https://github.com/siraben/r5rs-denot/tree/monad-transformers)
 branch.
 
+## Quick Start
+```ShellSession
+$ nix run github:siraben/r5rs-denot # with Nix
+$ cabal run # with Cabal
+```
+
+## Background
+
 The R5RS Scheme specification is a 50-page beauty, outlining the
 syntax and semantics of Scheme in easy to understand prose, and
 concludes with a denotational semantics.  The semantics looks a lot
@@ -152,7 +160,7 @@ Memory used: 16142 cells
   - [x] Inject `IO` computations into the Scheme monad
     - [ ] Implement ports, and user I/O
 - [ ] Automated test suite
-      
+
 ## Limitations
 This is also a good example of the problems with "unstable
 denotations", as the specification is quite rigid and would have to be
