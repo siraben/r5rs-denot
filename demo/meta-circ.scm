@@ -72,7 +72,7 @@
                                           (number-to-string gensym-count))))
                      (begin
                        (set! gensym-count (+ gensym-count 1))
-                       (string-to-symbol (string-append 
+                       (string-to-symbol (string-append
                                           (car params)
                                           (string-append
                                            "$"
@@ -192,7 +192,7 @@
 (define (or->exps s-exp) (cdr s-exp))
 
 (define (make-or exps)
-  (cond 
+  (cond
    ((null? exps)    #f)
    ((singlet? exps) (car exps))
    (else            (cons 'or exps))))
@@ -257,9 +257,9 @@
                                     (define->exp def)))
 
 ;; <body> => <letrec-exp>
-(define (body->letrec decs)   (partition-k 
+(define (body->letrec decs)   (partition-k
                                define?
-                               decs 
+                               decs
                                (lambda (defs exps)
                                  (if (null? defs)
                                      (make-begin exps)
@@ -317,7 +317,7 @@
   (if (not (and? exp))
       exp
       (let ((exps (and->exps exp)))
-        (cond 
+        (cond
          ((null? exps)    #t)
          ((singlet? exps) (car exps))
          (else            (list s3d-if (car exps)
@@ -331,7 +331,7 @@
   (if (not (or? exp))
       exp
       (let ((exps (or->exps exp)))
-        (cond 
+        (cond
          ((null? exps)    #f)
          ((singlet? exps) (car exps))
          (else            (let (($tmp (gensym "or-tmp")))
@@ -352,7 +352,7 @@
   (cond
    ((singlet? bindings) (cons s3d-let (cons (list (car bindings)) body)))
    ((null? bindings)    (make-begin body))
-   (else                (cons s3d-let (cons (list (car bindings)) 
+   (else                (cons s3d-let (cons (list (car bindings))
                                            (list (let*-bindings->let (cdr bindings) body)))))))
 
 
@@ -361,8 +361,8 @@
   (if (not (let? exp))
       exp
       (unzip-amap-k (let->bindings exp) (lambda (vars exps)
-                                          (cons (cons s3d-lambda 
-                                                      (cons vars 
+                                          (cons (cons s3d-lambda
+                                                      (cons vars
                                                             (let->body exp)))
                                                 exps)))))
 
@@ -377,16 +377,16 @@
    ((number? exp)    exp)
    ((boolean? exp)   exp)
    ((string? exp)    exp)
-   
+
    ;; 3D-syntax is invoked to produce a captured value:
-   
+
    ((procedure? exp) (exp))
-   
+
    ((app? exp)       (perform-apply (eval (app->fun exp) env) exp env))))
 
 ;; eval-with : env -> exp -> value
 
-(define (eval-with env) 
+(define (eval-with env)
   (lambda (exp)
     (eval exp env)))
 
@@ -471,14 +471,13 @@
 
 ;;; Mutable environments are constructed from closures:
 
+;;  type env = var bool value -> value
 
-                                        ;  type env = var bool value -> value
+;; If the second parameter to an environment is true,
+;; then it modifies the value of that variable.
 
-                                        ; If the second parameter to an environment is true, 
-                                        ; then it modifies the value of that variable.
-
-                                        ; If the second parameter is false,
-                                        ; then it returns the value of that variable.
+;; If the second parameter is false,
+;; then it returns the value of that variable.
 
 ;; env-lookup : env var -> value
 
@@ -530,7 +529,7 @@
         (list 'display    display)
         (list 'number->string    number->string)
         (list 'newline    newline)
-        (list 'cons       cons) 
+        (list 'cons       cons)
         (list 'car        car)
         (list 'cdr        cdr)
         (list 'cadr       cadr)
@@ -550,7 +549,7 @@
         (list '=          =)
         (list 'gensym     gensym)
         (list 'void       void)
-        
+
         (list 'quote    (list 'syntax-primitive eval-quote))
         (list 'if       (list 'syntax-primitive eval-if))
         (list 'cond     (list 'syntax-primitive eval-cond))
@@ -569,13 +568,13 @@
 
 (define (initial-environment)
   (unzip-amap-k initial-environment-amap (lambda (symbols values)
-                                           (env-extend* empty-env 
+                                           (env-extend* empty-env
                                                         symbols
                                                         values))))
 
 ;; initial : symbol -> value
 
-(define (initial sym) 
+(define (initial sym)
   (env-lookup (initial-environment) sym))
 
 ;; s3d : value -> s3d-s-exp
