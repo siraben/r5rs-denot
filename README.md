@@ -13,7 +13,7 @@ $ cabal run # with Cabal
 
 ## Background
 
-The R5RS Scheme specification is a 50-page beauty, outlining the
+The [R5RS Scheme specification](https://www.schemers.org/Documents/Standards/R5RS/r5rs.pdf) is a 50-page beauty, outlining the
 syntax and semantics of Scheme in easy to understand prose, and
 concludes with a denotational semantics.  The semantics looks a lot
 like Haskell because in a sense it _is_ Haskell!  We can turn the
