@@ -13,7 +13,7 @@ module SchemeParser where
 import Data.List.NonEmpty (fromList, NonEmpty((:|)))
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
-import Data.Functor
+import Data.Functor ((<$>), ($>))
 
 a <||> b = try a <|> b
 
