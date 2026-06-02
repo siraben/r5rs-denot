@@ -107,19 +107,13 @@ instance Show M where
   show Undefined = "#<undefined>"
 
 -- |Procedures
-type F = (L, [E] -> K -> C)
+type F = (L, [E] -> Scheme' [E])
 
 -- |Stores
 type S = (Int, M.IntMap (E,T))
 
 -- |Environment
 type U = Env.Map Ide L
-
--- |Command continuation
-type C = S -> A
-
--- |Expression continuation
-type K = [E] -> C
 
 -- |Answer
 type A = ([E],S)

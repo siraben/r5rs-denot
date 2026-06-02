@@ -33,6 +33,9 @@ cases =
   , ("program define", rparse "(define x 4) (+ x 6)", ["10"])
   , ("let", rparse "(let ((x 2) (y 3)) (* x y))", ["6"])
   , ("call with values", rparse "(call-with-values (lambda () (values 1 2)) +)", ["3"])
+  , ("call/cc escape", rparse "(call/cc (lambda (k) (k 42) 0))", ["42"])
+  , ("set-car mutation", rparse "(let ((p (cons 1 2))) (set-car! p 9) (car p))", ["9"])
+  , ("rest arguments", rparse "((lambda (x . xs) xs) 1 2 3)", ["(2 3)"])
   ]
 
 runCase :: Case -> IO [String]
