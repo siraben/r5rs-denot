@@ -7,7 +7,6 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
-{-# OPTIONS_GHC -Wno-partial-type-signatures -fdefer-typed-holes -fno-warn-unused-imports -fdefer-type-errors #-}
 
 module SchemeEval where
 
@@ -15,6 +14,7 @@ import Data.Maybe
 import SchemeParser
 import SchemeTypes
 import qualified Data.IntMap as M
+import Control.Monad ((<=<))
 import Control.Monad.Reader
 import Control.Monad.Cont
 import Control.Monad.State
@@ -225,16 +225,25 @@ holdM a = do
   sendM (fst (m M.! a))
 
 single :: (E -> C) -> K
-single ϕ es
-  | length es == 1 = ϕ (es !! 0)
-  | otherwise =
-    wrong
-      ("wrong number of return values, expected 1 but got " <> show (length es))
+single ϕ εs =
+  if length εs == 1
+    then ϕ (singleValue εs)
+    else wrong ("wrong number of return values, expected 1 but got " <> show (length εs))
 
-singleM es =
-  if length es == 1
-    then pure (head es)
-    else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
+singleM :: [E] -> Scheme' E
+singleM εs =
+  if length εs == 1
+    then pure (singleValue εs)
+    else wrongM ("wrong number of return values, expected 1 but got " <> show (length εs))
+
+singleValue :: [E] -> E
+singleValue εs =
+  if length εs == 1
+    then
+      case εs of
+        ε:_ -> ε
+        [] -> error "singleValue: empty value list"
+    else error ("wrong number of return values, expected 1 but got " <> show (length εs))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -517,7 +526,7 @@ numberToString = onearg
       (Ek (Number n)) -> send (Ek (String (show n)))
       χ -> \_ -> wrong ("non-numeric argument to number->string: " <> show χ))
 
-liftExpr = applicate . head . fst . evalStd
+liftExpr = applicate . singleValue . fst . evalStd
 
 liftString = liftExpr . rparse
 

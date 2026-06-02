@@ -1,6 +1,5 @@
 module SchemeTests where
 
-import SchemeEval
 import SchemeTypes
 
 sId = Lambda ["x"] [] (Id "x")
