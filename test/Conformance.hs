@@ -32,7 +32,7 @@ runCase :: Case -> IO (Maybe String)
 runCase (Case path expected) = do
   sourcePath <- getDataFileName path
   source <- readFile sourcePath
-  let actual = render (reval source)
+  actual <- render <$> reval source
   pure $
     if actual == expected
       then Nothing
@@ -43,6 +43,5 @@ runCase (Case path expected) = do
              , "  actual:   " <> show actual
              ]
 
-render :: (String, Maybe [E], S) -> [String]
-render (message, Nothing, _) = ["Error: " <> message]
-render (_, Just values, store) = (`showFull` store) <$> values
+render :: ([E], S) -> [String]
+render (values, store) = (`showFull` store) <$> values

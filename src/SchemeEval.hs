@@ -2,110 +2,145 @@
 
 module SchemeEval where
 
+import Control.Monad ((<=<))
+import Control.Monad.Cont
+import Control.Monad.Reader
+import Control.Monad.State
+import Data.Function ((&))
+import qualified Data.IntMap as M
+import qualified Data.Map.Strict as Env
 import SchemeParser
 import SchemeTypes
-import qualified Data.Map.Strict as Env
-import qualified Data.IntMap.Strict as M
 
-eval :: Expr -> U -> K -> C
-eval (Const a) ρ κ = send (Ek a) κ
-eval (Id i) ρ κ =
-  hold
-    (envLookup ρ i)
-    (single
-       (\case
-          Em Undefined -> wrong ("Undefined variable: " <> i)
-          e -> send e κ))
-eval (App e0 e) ρ κ =
-  evals (permute (e0 : e)) ρ ((\(e:es) -> applicate e es κ) . unpermute)
-eval (If ε0 ε1 ε2) ρ κ =
-  eval ε0 ρ $
-  single $ \e ->
-    if truish e
-      then eval ε1 ρ κ
-      else eval ε2 ρ κ
-eval (IfPartial ε0 ε1) ρ κ =
-  eval ε0 ρ $
-  single $ \e ->
-    if truish e
-      then eval ε1 ρ κ
-      else send (Em Unspecified) κ
-eval (Lambda is γ e0) ρ κ =
-  \σ ->
-    send
-      (Ef
-         ( new σ
-         , \εs κ' ->
-             if length εs == length is
-               then tievals
-                      ((\ρ' -> evalc γ ρ' (eval e0 ρ' κ')) . extends ρ is)
-                      εs
-               else wrong
-                      ("wrong number of arguments, expected " <>
-                       show (length is) <>
-                       ", namely " <>
-                       show is <> " but got " <> show (length εs) <> " instead")))
-      κ
-      (update (new σ) (Em Unspecified) σ)
-eval (LambdaV is i gs e0) ρ κ =
-  \σ ->
-    send
-      (Ef
-         ( new σ
-         , \es κ' ->
-             if length es >= length is
-               then tievalsrest
-                      ((\ρ' -> evalc gs ρ' (eval e0 ρ' κ')) .
-                       extends ρ (is <> [i]))
-                      (length is)
-                      es
-               else wrong
-                      ("too few arguments, expected at least " <>
-                       show (length is) <> ", namely " <> show is)))
-      κ
-      (update (new σ) (Em Unspecified) σ)
-eval (LambdaVV i gs e0) ρ κ = eval (LambdaV [] i gs e0) ρ κ
-eval (Set i e) ρ κ =
-  eval e ρ $ single $ \e -> assign (envLookup ρ i) e (send (Em Unspecified) κ)
+runSchemeWith :: U -> S -> Scheme [E] -> IO A
+runSchemeWith ρ σ ϕ =
+  ϕ
+    & unScheme
+    & (`runReaderT` ρ)
+    & (`runStateT` σ)
+    & (`runContT` pure)
 
--- |Evaluate a list of expressions, sending the collected result to
--- the continuation.
-evals :: [Expr] -> U -> K -> C
-evals [] _ κ = κ []
-evals (e0:es) ρ κ = eval e0 ρ $ single $ \e0 -> evals es ρ $ \es -> κ (e0 : es)
+runScheme :: Scheme [E] -> IO A
+runScheme = runSchemeWith stdEnv stdStore
 
--- |Evaluate a list of commands, returning to the continuation.
-evalc :: [Expr] -> U -> C -> C
-evalc [] ρ θ      = θ
-evalc (g0:gs) ρ θ = eval g0 ρ $ \es -> evalc gs ρ θ
+sputChar :: MonadIO m => Char -> SchemeT m u r s ()
+sputChar = liftIO . putChar
+
+sputStrLn :: MonadIO m => String -> SchemeT m u r s ()
+sputStrLn = liftIO . putStrLn
+
+eval :: Expr -> Scheme [E]
+eval = evalM
+
+evalM :: Expr -> Scheme [E]
+evalM (Const a) = sendM (Ek a)
+evalM (Id i) = do
+  ρ <- ask
+  ε <- holdM (envLookup ρ i)
+  case ε of
+    Em Undefined -> wrongM ("Undefined variable: " <> i)
+    ε' -> sendM ε'
+evalM (App e0 εs) = do
+  εs' <- unpermute <$> evalsM (permute (e0 : εs))
+  case εs' of
+    (ϕ:args) -> applicateM ϕ args
+    [] -> wrongM "application with no operator"
+evalM (If ε0 ε1 ε2) = do
+  ε <- singleM =<< evalM ε0
+  if truish ε
+    then evalM ε1
+    else evalM ε2
+evalM (IfPartial ε0 ε1) = do
+  ε <- singleM =<< evalM ε0
+  if truish ε
+    then evalM ε1
+    else sendM (Em Unspecified)
+evalM (Lambda is gs e0) = do
+  ρ <- ask
+  α <- alloc (Em Unspecified)
+  sendM (Ef (α, ϕ ρ))
+  where
+    ϕ ρ εs =
+      if length εs == length is
+        then do
+          αs <- tievalsM εs
+          local (const (extends ρ is αs)) (evalcM gs >> evalM e0)
+        else
+          wrongM
+            ( "wrong number of arguments, expected "
+                <> show (length is)
+                <> ", namely "
+                <> show is
+                <> " but got "
+                <> show (length εs)
+                <> " instead"
+            )
+evalM (LambdaV is i gs e0) = do
+  ρ <- ask
+  α <- alloc (Em Unspecified)
+  sendM (Ef (α, ϕ ρ))
+  where
+    ϕ ρ εs =
+      if length εs >= length is
+        then do
+          rest <- makeList (dropfirst εs (length is))
+          αs <- tievalsM (takefirst εs (length is) <> [rest])
+          local (const (extends ρ (is <> [i]) αs)) (evalcM gs >> evalM e0)
+        else
+          wrongM
+            ("too few arguments, expected at least " <> show (length is) <> ", namely " <> show is)
+evalM (LambdaVV i gs e0) = evalM (LambdaV [] i gs e0)
+evalM (Set i e) = do
+  ε <- singleM =<< evalM e
+  ρ <- ask
+  assignM (envLookup ρ i) ε
+  sendM (Em Unspecified)
+
+-- |Evaluate a list of expressions, collecting one value from each.
+evalsM :: [Expr] -> Scheme [E]
+evalsM = mapM (singleM <=< evalM)
+
+-- |Evaluate a list of commands, discarding each command's values.
+evalcM :: [Expr] -> Scheme ()
+evalcM = mapM_ evalM
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
-envLookup u i = Env.findWithDefault 0 i u
+envLookup ρ i = Env.findWithDefault 0 i ρ
 
 -- |Extend an environment with a list of identifiers and their store
 -- locations.
 extends :: U -> [Ide] -> [L] -> U
-extends ρ is αs = foldr (uncurry Env.insert) ρ (zip is αs)
+extends ρ is αs = Env.fromList (zip is αs) <> ρ
 
--- |Send a value to the continuation.
-send :: E -> K -> C
-send ε κ = κ [ε]
+-- |Send a value to the current continuation.
+sendM :: E -> Scheme [E]
+sendM ε = pure [ε]
 
 -- |Raise an error.
-wrong :: X -> C
-wrong χ ρ = (χ, Nothing, ρ)
+wrongM :: String -> Scheme a
+wrongM = error
 
--- |Given a location, look it up in the store and send it to the
--- continuation.
-hold :: L -> K -> C
-hold α κ σ@(c, m) = send (fst (m M.! α)) κ σ
+-- |Given a location, look it up in the store.
+holdM :: L -> Scheme E
+holdM α = do
+  (_, σ) <- get
+  pure (fst (σ M.! α))
 
-single :: (E -> C) -> K
-single ϕ [ε] = ϕ ε
-single _ es =
-  wrong
-    ("wrong number of return values, expected 1 but got " <> show (length es))
+singleM :: [E] -> Scheme E
+singleM εs =
+  if length εs == 1
+    then pure (singleValue εs)
+    else wrongM ("wrong number of return values, expected 1 but got " <> show (length εs))
+
+singleValue :: [E] -> E
+singleValue εs =
+  if length εs == 1
+    then
+      case εs of
+        ε:_ -> ε
+        [] -> error "singleValue: empty value list"
+    else error ("wrong number of return values, expected 1 but got " <> show (length εs))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -113,7 +148,7 @@ new (c, _) = c + 1
 
 -- |The empty environment.
 emptyEnv :: U
-emptyEnv = Env.empty
+emptyEnv = mempty
 
 -- |The empty store.
 emptyStore :: S
@@ -122,12 +157,19 @@ emptyStore = (0, mempty)
 update :: L -> E -> S -> S
 update α ε (c, σ) = (max α c, M.insert α (ε, True) σ)
 
-assign :: L -> E -> C -> C
-assign α ε θ σ = θ (update α ε σ)
+alloc :: E -> Scheme L
+alloc ε = do
+  σ <- get
+  let α = new σ
+  put (update α ε σ)
+  pure α
+
+assignM :: L -> E -> Scheme ()
+assignM α ε = modify (update α ε)
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
-truish _                    = True
+truish _ = True
 
 -- |Permute an expression list (as the order of evaluation of
 -- arguments is undefined in Scheme).  Must be an inverse operation to
@@ -140,376 +182,403 @@ permute = id
 unpermute :: [E] -> [E]
 unpermute = id
 
--- |Apply a Scheme procedure to a Haskell function that accepts list
--- of values, passing them as operands to the procedure.
-applicate :: E -> [E] -> K -> C
-applicate (Ef ε) εs κ = snd ε εs κ
-applicate χ _ _ =
-  wrong ("failed to apply " <> show χ <> ", expected a procedure")
+-- |Apply a Scheme procedure to a list of operands.
+applicateM :: E -> [E] -> Scheme [E]
+applicateM (Ef (_, ϕ)) εs = ϕ εs
+applicateM χ _ = wrongM ("failed to apply " <> show χ <> ", expected a procedure")
 
--- |Lift a Haskell function that takes one argument into a
--- Scheme procedure.
-onearg :: (E -> K -> C) -> [E] -> K -> C
-onearg ζ [ε] κ = ζ ε κ
-onearg _ a _ =
-  wrong ("wrong number of arguments, expected 1 but got " <> show (length a))
+-- |Lift a Haskell function that takes one argument into a Scheme
+-- procedure.
+oneargM :: (E -> Scheme [E]) -> [E] -> Scheme [E]
+oneargM ϕ [ε] = ϕ ε
+oneargM _ εs = wrongM ("wrong number of arguments, expected 1 but got " <> show (length εs))
 
 -- |Lift a Haskell function that takes two arguments into a Scheme
 -- procedure.
-twoarg :: (E -> E -> K -> C) -> [E] -> K -> C
-twoarg ζ [ε1, ε2] κ = ζ ε1 ε2 κ
-twoarg _ χ _ =
-  wrong
-    ("wrong number of arguments, expected 2 but got " <>
-     show (length χ) <> ": " <> show χ)
+twoargM :: (E -> E -> Scheme [E]) -> [E] -> Scheme [E]
+twoargM ϕ [ε1, ε2] = ϕ ε1 ε2
+twoargM _ εs =
+  wrongM ("wrong number of arguments, expected 2 but got " <> show (length εs) <> ": " <> show εs)
 
--- |Scheme @list@, also an example of how Scheme procedures can be
--- defined from other ones, but written in CPS.
-list :: [E] -> K -> C
-list es κ σ =
-  let (ε, σ') = makeList es σ
-   in send ε κ σ'
+makePair :: E -> E -> Scheme E
+makePair ε1 ε2 = do
+  α <- alloc ε1
+  β <- alloc ε2
+  pure (Ep (α, β, True))
 
-makeList :: [E] -> S -> (E, S)
-makeList [] σ = (Ek Nil, σ)
-makeList (ε:εs) σ =
-  let (rest, σ') = makeList εs σ
-   in makePair ε rest σ'
+-- |Scheme @list@.
+list :: [E] -> Scheme [E]
+list = fmap pure . makeList
 
-makePair :: E -> E -> S -> (E, S)
-makePair ε1 ε2 σ =
-  let α = new σ
-      σ' = update α ε1 σ
-      β = new σ'
-      σ'' = update β ε2 σ'
-   in (Ep (α, β, True), σ'')
+makeList :: [E] -> Scheme E
+makeList [] = pure (Ek Nil)
+makeList (ε:εs) = do
+  rest <- makeList εs
+  makePair ε rest
 
 -- |Scheme @cons@.
-cons :: [E] -> K -> C
-cons =
-  twoarg
-    (\ε1 ε2 κ σ ->
-       let (ε, σ') = makePair ε1 ε2 σ
-        in send ε κ σ')
+cons :: [E] -> Scheme [E]
+cons = twoargM (\ε1 ε2 -> sendM =<< makePair ε1 ε2)
 
-factorial :: [E] -> K -> C
+factorial :: [E] -> Scheme [E]
 factorial =
-  onearg
-    (\ε1 κ ->
-       case ε1 of
-         (Ek (Number 0)) -> send (Ek (Number 1)) κ
-         m@(Ek (Number n)) ->
-           factorial [Ek (Number (n - 1))] $ single $ \e -> mult [e, m] κ
-         χ -> wrong ("non-numeric argument to factorial" <> show χ))
+  oneargM
+    ( \case
+        Ek (Number 0) -> sendM (Ek (Number 1))
+        m@(Ek (Number n)) -> do
+          ε <- singleM =<< factorial [Ek (Number (n - 1))]
+          mult [ε, m]
+        χ -> wrongM ("non-numeric argument to factorial" <> show χ)
+    )
 
+makeNumBinop :: String -> (Integer -> E) -> (Integer -> Integer -> Integer) -> [E] -> Scheme [E]
 makeNumBinop name constructor op =
-  twoarg
-    (\ε1 ε2 κ ->
-       case ε1 of
-         (Ek (Number r1)) ->
-           case ε2 of
-             (Ek (Number r2)) -> send (constructor (op r1 r2)) κ
-             χ ->
-               wrong
-                 ("non-numeric argument to " <>
-                  name <> ", got " <> show χ <> " instead")
-         χ ->
-           wrong
-             ("non-numeric argument to " <>
-              name <> ", got " <> show χ <> " instead"))
+  twoargM
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ek (Number r1) ->
+            case ε2 of
+              Ek (Number r2) -> sendM (constructor (op r1 r2))
+              χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+          χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+    )
+
+makeNumPredicate :: String -> (Integer -> Integer -> Bool) -> [E] -> Scheme [E]
+makeNumPredicate name op =
+  twoargM
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ek (Number r1) ->
+            case ε2 of
+              Ek (Number r2) -> retbool (op r1 r2)
+              χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+          χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+    )
 
 -- |Scheme @+@
-add :: [E] -> K -> C
+add :: [E] -> Scheme [E]
 add = makeNumBinop "+" (Ek . Number) (+)
 
 -- |Scheme @<@
-less :: [E] -> K -> C
-less = makeNumBinop "<" (Ek . Boolean) (<)
+less :: [E] -> Scheme [E]
+less = makeNumPredicate "<" (<)
 
 -- |Scheme @>@
-more :: [E] -> K -> C
-more = makeNumBinop ">" (Ek . Boolean) (>)
+more :: [E] -> Scheme [E]
+more = makeNumPredicate ">" (>)
 
 -- |Scheme @=@
-eqli :: [E] -> K -> C
-eqli = makeNumBinop "=" (Ek . Boolean) (==)
+eqli :: [E] -> Scheme [E]
+eqli = makeNumPredicate "=" (==)
 
 -- |Scheme @>=@
-eqlig :: [E] -> K -> C
-eqlig = makeNumBinop ">=" (Ek . Boolean) (>=)
+eqlig :: [E] -> Scheme [E]
+eqlig = makeNumPredicate ">=" (>=)
 
 -- |Scheme @<=@
-eqlilt :: [E] -> K -> C
-eqlilt = makeNumBinop "<=" (Ek . Boolean) (<=)
+eqlilt :: [E] -> Scheme [E]
+eqlilt = makeNumPredicate "<=" (<=)
 
 -- |Scheme @*@
-mult :: [E] -> K -> C
+mult :: [E] -> Scheme [E]
 mult = makeNumBinop "*" (Ek . Number) (*)
 
 -- |Scheme @-@
-sub :: [E] -> K -> C
+sub :: [E] -> Scheme [E]
 sub = makeNumBinop "-" (Ek . Number) (-)
 
 -- |Scheme @modulo@
-smod :: [E] -> K -> C
+smod :: [E] -> Scheme [E]
 smod = makeNumBinop "modulo" (Ek . Number) mod
 
 -- |Scheme @div@
-sdiv :: [E] -> K -> C
+sdiv :: [E] -> Scheme [E]
 sdiv = makeNumBinop "div" (Ek . Number) div
 
 -- |Scheme @car@
-car :: [E] -> K -> C
-car =
-  onearg
-    (\case
-       (Ep (a, _, _)) -> hold a
-       χ -> \_ -> wrong ("non-pair argument to car: " <> show χ))
+car :: [E] -> Scheme [E]
+car = oneargM (sendM <=< carValue)
+
+carValue :: E -> Scheme E
+carValue =
+  \case
+    Ep (α, _, _) -> holdM α
+    χ -> wrongM ("non-pair argument to car: " <> show χ)
 
 -- |Scheme @cdr@
-cdr :: [E] -> K -> C
-cdr =
-  onearg
-    (\case
-       (Ep (_, a, _)) -> hold a
-       χ -> \_ -> wrong ("non-pair argument to cdr: " <> show χ))
+cdr :: [E] -> Scheme [E]
+cdr = oneargM (sendM <=< cdrValue)
+
+cdrValue :: E -> Scheme E
+cdrValue =
+  \case
+    Ep (_, α, _) -> holdM α
+    χ -> wrongM ("non-pair argument to cdr: " <> show χ)
 
 -- |Scheme @set-car!@
-setcar :: [E] -> K -> C
+setcar :: [E] -> Scheme [E]
 setcar =
-  twoarg
-    (\ε1 ε2 κ ->
-       case ε1 of
-         Ep (a, _, True) -> assign a ε2 (send (Em Unspecified) κ)
-         Ep _ -> wrong "immutable argument to set-car!"
-         χ -> wrong ("non-pair argument to set-cdr!: " <> show χ))
+  twoargM
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ep (α, _, True) -> assignM α ε2 >> sendM (Em Unspecified)
+          Ep _ -> wrongM "immutable argument to set-car!"
+          χ -> wrongM ("non-pair argument to set-cdr!: " <> show χ)
+    )
 
--- |Scheme @set-car@
-setcdr :: [E] -> K -> C
+-- |Scheme @set-cdr!@
+setcdr :: [E] -> Scheme [E]
 setcdr =
-  twoarg
-    (\ε1 ε2 κ ->
-       case ε1 of
-         Ep (_, a, True) -> assign a ε2 (send (Em Unspecified) κ)
-         Ep _ -> wrong "immutable argument to set-cdr!"
-         χ -> wrong ("non-pair argument to set-cdr! got " <> show χ))
+  twoargM
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ep (_, α, True) -> assignM α ε2 >> sendM (Em Unspecified)
+          Ep _ -> wrongM "immutable argument to set-cdr!"
+          χ -> wrongM ("non-pair argument to set-cdr! got " <> show χ)
+    )
 
 -- |Scheme @eqv?@
-eqv :: [E] -> K -> C
+eqv :: [E] -> Scheme [E]
 eqv =
-  twoarg
-    (\ε1 ε2 ->
-       case (ε1, ε2) of
-         (Ek α, Ek β)                 -> retbool $ α == β
-         (Em α, Em β)                 -> retbool $ α == β
-         (Ev α, Ev β)                 -> retbool $ α == β
-         (Ep (α, x, _), Ep (β, y, _)) -> retbool $ α == β && x == y
-         (Ef (α, _), Ef (β, _))       -> retbool $ α == β
-         _                            -> retbool False)
+  twoargM
+    ( \ε1 ε2 ->
+        case (ε1, ε2) of
+          (Ek α, Ek β) -> retbool (α == β)
+          (Em α, Em β) -> retbool (α == β)
+          (Ev α, Ev β) -> retbool (α == β)
+          (Ep (α, x, _), Ep (β, y, _)) -> retbool (α == β && x == y)
+          (Ef (α, _), Ef (β, _)) -> retbool (α == β)
+          _ -> retbool False
+    )
 
-retbool :: Bool -> K -> C
-retbool = send . Ek . Boolean
+retbool :: Bool -> Scheme [E]
+retbool = sendM . Ek . Boolean
 
-predLift :: (E -> Bool) -> [E] -> K -> C
-predLift p = onearg (retbool . p)
+predLift :: (E -> Bool) -> [E] -> Scheme [E]
+predLift p = oneargM (retbool . p)
 
 -- |Scheme @number?@
-numberp :: [E] -> K -> C
+numberp :: [E] -> Scheme [E]
 numberp = predLift p
   where
     p (Ek (Number _)) = True
-    p _               = False
+    p _ = False
 
 -- |Scheme @boolean?@
-booleanp :: [E] -> K -> C
+booleanp :: [E] -> Scheme [E]
 booleanp = predLift p
   where
     p (Ek (Boolean _)) = True
-    p _                = False
+    p _ = False
 
 -- |Scheme @symbol?@
-symbolp :: [E] -> K -> C
+symbolp :: [E] -> Scheme [E]
 symbolp = predLift p
   where
     p (Ek (Symbol _)) = True
-    p _               = False
+    p _ = False
 
 -- |Scheme @procedure?@
-procedurep :: [E] -> K -> C
+procedurep :: [E] -> Scheme [E]
 procedurep = predLift p
   where
     p (Ef _) = True
-    p _      = False
+    p _ = False
 
 -- |Scheme @pair?@
-pairp :: [E] -> K -> C
+pairp :: [E] -> Scheme [E]
 pairp = predLift p
   where
     p (Ep _) = True
-    p _      = False
+    p _ = False
 
 -- |Scheme @null?@
-nullp :: [E] -> K -> C
+nullp :: [E] -> Scheme [E]
 nullp = predLift p
   where
     p (Ek Nil) = True
-    p _        = False
+    p _ = False
 
 -- |Scheme @string?@
-stringp :: [E] -> K -> C
+stringp :: [E] -> Scheme [E]
 stringp = predLift p
   where
     p (Ek (String _)) = True
-    p _        = False
+    p _ = False
 
 -- |Scheme @symbol->string@
-symbolToString :: [E] -> K -> C
-symbolToString = onearg
-  (\case
-      (Ek (Symbol q)) -> send (Ek (String q))
-      v -> \_ -> wrong ("non-symbol argument to symbol->string: " <> show v))
+symbolToString :: [E] -> Scheme [E]
+symbolToString =
+  oneargM
+    ( \case
+        Ek (Symbol q) -> sendM (Ek (String q))
+        χ -> wrongM ("non-symbol argument to symbol->string: " <> show χ)
+    )
 
 -- |Scheme @string->symbol@
-stringToSymbol :: [E] -> K -> C
-stringToSymbol = onearg
-  (\case
-      (Ek (String q)) -> send (Ek (Symbol q))
-      v -> \_ -> wrong ("non-string argument to string->symbol: " <> show v))
+stringToSymbol :: [E] -> Scheme [E]
+stringToSymbol =
+  oneargM
+    ( \case
+        Ek (String q) -> sendM (Ek (Symbol q))
+        χ -> wrongM ("non-string argument to string->symbol: " <> show χ)
+    )
 
 -- |Scheme @string-append@
-stringAppend = twoarg
- (\ε1 ε2 ->
-    case (ε1, ε2) of
-      (Ek (String p), Ek (String q)) -> send (Ek (String (p <> q)))
-      (χ, Ek (String q)) -> \_ -> wrong
-                                    ("non-string argument to string-append: " <> show χ)
-      (Ek (String p), χ) -> \_ -> wrong
-                                    ("non-string argument to string-append: " <> show χ)
-      (χ, χ') -> \_ -> wrong ("non-string arguments to string-append: " <> show χ <> " " <> show χ'))
+stringAppend :: [E] -> Scheme [E]
+stringAppend =
+  twoargM
+    ( \ε1 ε2 ->
+        case (ε1, ε2) of
+          (Ek (String p), Ek (String q)) -> sendM (Ek (String (p <> q)))
+          (χ, Ek (String _)) -> wrongM ("non-string argument to string-append: " <> show χ)
+          (Ek (String _), χ) -> wrongM ("non-string argument to string-append: " <> show χ)
+          (χ, χ') -> wrongM ("non-string arguments to string-append: " <> show χ <> " " <> show χ')
+    )
 
--- |Scheme @number->string
-numberToString = onearg
-  (\case
-      (Ek (Number n)) -> send (Ek (String (show n)))
-      χ -> \_ -> wrong ("non-numeric argument to number->string: " <> show χ))
+-- |Scheme @number->string@
+numberToString :: [E] -> Scheme [E]
+numberToString =
+  oneargM
+    ( \case
+        Ek (Number n) -> sendM (Ek (String (show n)))
+        χ -> wrongM ("non-numeric argument to number->string: " <> show χ)
+    )
 
-valueStdExtract (_, Nothing, _) =
-  error "Failed to extract value from expression"
-valueStdExtract (_, Just [a], _) = a
-valueStdExtract (_, Just a, _) =
-  error ("wrong number of return values, expected 1 but got " <> show (length a))
+-- |Scheme @display@.
+display :: [E] -> Scheme [E]
+display =
+  oneargM $ \ε -> do
+    σ <- get
+    liftIO . putStr $
+      case ε of
+        Ek (String s) -> s
+        Ek (Character c) -> [c]
+        _ -> showFull ε σ
+    sendM (Em Unspecified)
 
-liftExpr = applicate . valueStdExtract . evalStd
+-- |Scheme @write@.
+write :: [E] -> Scheme [E]
+write =
+  oneargM $ \ε -> do
+    σ <- get
+    liftIO (putStr (showFull ε σ))
+    sendM (Em Unspecified)
 
+-- |Scheme @newline@.
+newline :: [E] -> Scheme [E]
+newline [] = liftIO (putChar '\n') >> sendM (Em Unspecified)
+newline εs = wrongM ("wrong number of arguments, expected 0 but got " <> show (length εs))
+
+liftExpr :: Expr -> [E] -> Scheme [E]
+liftExpr expr args = do
+  (εs, _) <- liftIO (evalStd expr)
+  applicateM (singleValue εs) args
+
+liftString :: String -> [E] -> Scheme [E]
 liftString = liftExpr . rparse
 
 -- |Parse and evaluate a string.
-reval :: String -> A
+reval :: String -> IO A
 reval s =
   case readProg s of
     Right res -> evalStd res
-    Left err  -> ("Error: " <> show err, Nothing, emptyStore)
+    Left err -> error ("Parse error: " <> show err)
 
 -- |Parse a string into an expression.
 rparse :: String -> Expr
 rparse s =
   case readProg s of
     Right res -> res
-    Left _    -> error ("Failed to parse" <> s)
+    Left err -> error ("Parse error: " <> show err)
 
 -- |An example of defining a Scheme procedure given an expression.
+recursive :: [E] -> Scheme [E]
 recursive =
   liftExpr
-    (Lambda
-       ["fn"]
-       []
-       (App
-          (Lambda ["h"] [] (App (Id "h") [Id "h"]))
-          [ Lambda
-              ["g"]
-              []
-              (App
-                 (Id "fn")
-                 [ LambdaVV
-                     "arglist"
-                     []
-                     (App (Id "apply") [App (Id "g") [Id "g"], Id "arglist"])
-                 ])
-          ]))
+    ( Lambda
+        ["fn"]
+        []
+        ( App
+            (Lambda ["h"] [] (App (Id "h") [Id "h"]))
+            [ Lambda
+                ["g"]
+                []
+                ( App
+                    (Id "fn")
+                    [ LambdaVV
+                        "arglist"
+                        []
+                        (App (Id "apply") [App (Id "g") [Id "g"], Id "arglist"])
+                    ]
+                )
+            ]
+        )
+    )
 
 -- |Scheme @apply@
-apply :: [E] -> K -> C
+apply :: [E] -> Scheme [E]
 apply =
-  twoarg
-    (\ε1 ε2 κ ->
-       case ε1 of
-         Ef f -> valueslist [ε2] (\εs -> applicate ε1 εs κ)
-         χ    -> wrong ("bad procedure argument to apply: " <> show χ))
+  twoargM
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ef _ -> valueslistM ε2 >>= applicateM ε1
+          χ -> wrongM ("bad procedure argument to apply: " <> show χ)
+    )
 
-valueslist :: [E] -> K -> C
-valueslist =
-  onearg
-    (\ε κ ->
-       case ε of
-         Ep _ ->
-           cdr
-             [ε]
-             (\εs -> valueslist εs (\εs -> car [ε] (single (\ε -> κ (ε : εs)))))
-         (Ek Nil) -> κ []
-         χ -> wrong ("non-list argument to values-list:" <> show χ))
+valueslistM :: E -> Scheme [E]
+valueslistM =
+  \case
+    ε@(Ep _) -> do
+      ε' <- carValue ε
+      εs <- cdrValue ε >>= valueslistM
+      pure (ε' : εs)
+    Ek Nil -> pure []
+    χ -> wrongM ("non-list argument to values-list:" <> show χ)
 
-tievals :: ([L] -> C) -> [E] -> C
-tievals ϕ εs σ = go [] εs σ
-  where
-    go αs [] σ' = ϕ (reverse αs) σ'
-    go αs (ε:rest) σ' =
-      let α = new σ'
-       in go (α : αs) rest (update α ε σ')
+tievalsM :: [E] -> Scheme [L]
+tievalsM = mapM alloc
 
 -- |Scheme @call-with-current-continuation@
-callcc :: [E] -> K -> C
+callcc :: [E] -> Scheme [E]
 callcc =
-  onearg
-    (\ε κ ->
-       case ε of
-         Ef _ ->
-           \σ ->
-             applicate
-               ε
-               [Ef (new σ, \εs κ' -> κ εs)]
-               κ
-               (update (new σ) (Em Unspecified) σ)
-         _ -> wrong ("bad procedure argument to call/cc: " <> show ε))
+  oneargM
+    ( \ε ->
+        case ε of
+          Ef _ ->
+            callCC $ \κ -> do
+              α <- alloc (Em Unspecified)
+              applicateM ε [Ef (α, κ)]
+          _ -> wrongM ("bad procedure argument to call/cc: " <> show ε)
+    )
 
 -- |Scheme @values@
-values :: [E] -> K -> C
-values εs κ = κ εs
+values :: [E] -> Scheme [E]
+values = pure
 
 -- |Scheme @call-with-values@
-cwv = twoarg (\ε1 ε2 κ -> applicate ε1 [] (\εs -> applicate ε2 εs κ))
+cwv :: [E] -> Scheme [E]
+cwv = twoargM (\ε1 ε2 -> applicateM ε1 [] >>= applicateM ε2)
 
-tievalsrest :: ([L] -> C) -> Int -> [E] -> C
-tievalsrest f es v =
-  list (dropfirst es v) (single (\e -> tievals f (takefirst es v <> [e])))
+dropfirst :: [E] -> Int -> [E]
+dropfirst εs v = drop v εs
 
-dropfirst = drop
-
-takefirst = take
-
--- |The "normal" continuation.
-idKCont :: [E] -> S -> A
-idKCont ε σ = ("", Just ε, σ)
+takefirst :: [E] -> Int -> [E]
+takefirst εs v = take v εs
 
 -- |Evaluate an expression with the standard environment and store.
-evalStd prog = eval prog stdEnv idKCont stdStore
+evalStd :: Expr -> IO A
+evalStd prog = runSchemeWith stdEnv stdStore (evalM prog)
 
 -- |The standard environment
 stdEnv :: U
 stdEnv = Env.fromList (zip stdEnvNames [1 ..])
 
+exprDefinedOps :: [(String, [E] -> Scheme [E])]
 exprDefinedOps = [("recursive", recursive)]
 
 -- |The list of built-in operations.
+builtInOps :: [(String, [E] -> Scheme [E])]
 builtInOps =
   [ ("+", add)
   , ("*", mult)
@@ -544,24 +613,27 @@ builtInOps =
   , ("string->symbol", stringToSymbol)
   , ("string-append", stringAppend)
   , ("number->string", numberToString)
-  ] <>
-  exprDefinedOps
+  , ("display", display)
+  , ("write", write)
+  , ("newline", newline)
+  ]
+    <> exprDefinedOps
 
 -- |The list of names of standard operations.
 stdEnvNames :: [String]
 stdEnvNames = map fst builtInOps
 
 -- |The list of standard operations.
-stdOps :: [[E] -> K -> C]
+stdOps :: [[E] -> Scheme [E]]
 stdOps = map snd builtInOps
 
 -- |The standard prelude.
 stdPrelude :: S
-stdPrelude = (n, M.fromList ((0,(Em Undefined, False)) : zipWith makeOpStore [1 ..] stdOps))
+stdPrelude = (n, M.fromList ((0, (Em Undefined, False)) : zipWith makeOpStore [1 ..] stdOps))
   where
     n = length stdOps + 1
     makeOpStore loc op = (loc, (Ef (loc, op), True))
 
 -- |The standard store, consisting of a Prelude and infinite space.
 stdStore :: S
-stdStore = stdPrelude 
+stdStore = stdPrelude
