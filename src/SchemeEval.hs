@@ -6,6 +6,7 @@ import Control.Monad ((<=<))
 import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Function ((&))
 import qualified Data.IntMap as M
 import qualified Data.Map.Strict as Env
 import SchemeParser
@@ -13,7 +14,11 @@ import SchemeTypes
 
 runSchemeWith :: U -> S -> Scheme [E] -> IO A
 runSchemeWith ρ σ ϕ =
-  runContT (runStateT (runReaderT (unScheme ϕ) ρ) σ) pure
+  ϕ
+    & unScheme
+    & (`runReaderT` ρ)
+    & (`runStateT` σ)
+    & (`runContT` pure)
 
 runScheme :: Scheme [E] -> IO A
 runScheme = runSchemeWith stdEnv stdStore
