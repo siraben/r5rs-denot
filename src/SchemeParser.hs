@@ -13,7 +13,7 @@ module SchemeParser where
 import Data.List.NonEmpty (fromList, NonEmpty((:|)))
 import SchemeTypes
 import Text.ParserCombinators.Parsec hiding (space)
-import Data.Functor ((<$>), ($>))
+import Data.Functor (($>))
 
 a <||> b = try a <|> b
 
@@ -245,8 +245,10 @@ schemeAnd =
   parens $ do
     reserved "and"
     exprs <- schemeExpr `sepBy` space
-    pure (foldr (\e es -> If e es (Const (Boolean False)))
-                (Const (Boolean True)) exprs)
+    pure $
+      case exprs of
+        [] -> Const (Boolean True)
+        _  -> foldr1 (\e es -> If e es (Const (Boolean False))) exprs
 
 -- Danger!  We're writing unhygienic macros!
 schemeOr = 

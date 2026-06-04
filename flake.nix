@@ -15,6 +15,7 @@
             version = "0.1.0.0";
             src = inclusive.lib.inclusive ./. [
               ./src
+              ./test
               ./r5rs-denot.cabal
               ./Setup.hs
               ./LICENSE
