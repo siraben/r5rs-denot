@@ -2,10 +2,10 @@
 
 module SchemeEval where
 
-import Data.Maybe
 import SchemeParser
 import SchemeTypes
-import qualified Data.IntMap as M
+import qualified Data.Map.Strict as Env
+import qualified Data.IntMap.Strict as M
 
 eval :: Expr -> U -> K -> C
 eval (Const a) ρ κ = send (Ek a) κ
@@ -81,12 +81,12 @@ evalc (g0:gs) ρ θ = eval g0 ρ $ \es -> evalc gs ρ θ
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
-envLookup u i = fromMaybe 0 (lookup i u)
+envLookup u i = Env.findWithDefault 0 i u
 
 -- |Extend an environment with a list of identifiers and their store
 -- locations.
 extends :: U -> [Ide] -> [L] -> U
-extends ρ is αs = zip is αs <> ρ
+extends ρ is αs = foldr (uncurry Env.insert) ρ (zip is αs)
 
 -- |Send a value to the continuation.
 send :: E -> K -> C
@@ -102,11 +102,10 @@ hold :: L -> K -> C
 hold α κ σ@(c, m) = send (fst (m M.! α)) κ σ
 
 single :: (E -> C) -> K
-single ϕ es
-  | length es == 1 = ϕ (es !! 0)
-  | otherwise =
-    wrong
-      ("wrong number of return values, expected 1 but got " <> show (length es))
+single ϕ [ε] = ϕ ε
+single _ es =
+  wrong
+    ("wrong number of return values, expected 1 but got " <> show (length es))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -114,7 +113,7 @@ new (c, _) = c + 1
 
 -- |The empty environment.
 emptyEnv :: U
-emptyEnv = mempty
+emptyEnv = Env.empty
 
 -- |The empty store.
 emptyStore :: S
@@ -167,17 +166,31 @@ twoarg _ χ _ =
 -- |Scheme @list@, also an example of how Scheme procedures can be
 -- defined from other ones, but written in CPS.
 list :: [E] -> K -> C
-list [] κ     = send (Ek Nil) κ
-list (e:es) κ = list es $ single $ \εs -> cons [e, εs] κ
--- TODO: rewrite with mapM
+list es κ σ =
+  let (ε, σ') = makeList es σ
+   in send ε κ σ'
+
+makeList :: [E] -> S -> (E, S)
+makeList [] σ = (Ek Nil, σ)
+makeList (ε:εs) σ =
+  let (rest, σ') = makeList εs σ
+   in makePair ε rest σ'
+
+makePair :: E -> E -> S -> (E, S)
+makePair ε1 ε2 σ =
+  let α = new σ
+      σ' = update α ε1 σ
+      β = new σ'
+      σ'' = update β ε2 σ'
+   in (Ep (α, β, True), σ'')
 
 -- |Scheme @cons@.
 cons :: [E] -> K -> C
 cons =
   twoarg
-    (\ε1 ε2 κ s ->
-       (\s' -> send (Ep (new s, new s', True)) κ (update (new s') ε2 s'))
-         (update (new s) ε1 s))
+    (\ε1 ε2 κ σ ->
+       let (ε, σ') = makePair ε1 ε2 σ
+        in send ε κ σ')
 
 factorial :: [E] -> K -> C
 factorial =
@@ -382,7 +395,9 @@ numberToString = onearg
 
 valueStdExtract (_, Nothing, _) =
   error "Failed to extract value from expression"
-valueStdExtract (_, Just a, _) = head a
+valueStdExtract (_, Just [a], _) = a
+valueStdExtract (_, Just a, _) =
+  error ("wrong number of return values, expected 1 but got " <> show (length a))
 
 liftExpr = applicate . valueStdExtract . evalStd
 
@@ -444,8 +459,12 @@ valueslist =
          χ -> wrong ("non-list argument to values-list:" <> show χ))
 
 tievals :: ([L] -> C) -> [E] -> C
-tievals ϕ [] σ     = ϕ [] σ
-tievals ϕ (ε:εs) σ = tievals (\αs -> ϕ (new σ : αs)) εs (update (new σ) ε σ)
+tievals ϕ εs σ = go [] εs σ
+  where
+    go αs [] σ' = ϕ (reverse αs) σ'
+    go αs (ε:rest) σ' =
+      let α = new σ'
+       in go (α : αs) rest (update α ε σ')
 
 -- |Scheme @call-with-current-continuation@
 callcc :: [E] -> K -> C
@@ -486,7 +505,7 @@ evalStd prog = eval prog stdEnv idKCont stdStore
 
 -- |The standard environment
 stdEnv :: U
-stdEnv = zip stdEnvNames [1 ..]
+stdEnv = Env.fromList (zip stdEnvNames [1 ..])
 
 exprDefinedOps = [("recursive", recursive)]
 

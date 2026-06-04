@@ -6,7 +6,8 @@ As defined in the R5RS standard.
 -}
 module SchemeTypes where
 
-import qualified Data.IntMap as M
+import qualified Data.IntMap.Strict as M
+import qualified Data.Map.Strict as Env
 import Data.List.NonEmpty
 
 -- |Locations
@@ -107,7 +108,7 @@ type F = (L, [E] -> K -> C)
 type S = (Int, M.IntMap (E,T))
 
 -- |Environment
-type U = [(Ide, L)]
+type U = Env.Map Ide L
 
 -- |Command continuation
 type C = S -> A
