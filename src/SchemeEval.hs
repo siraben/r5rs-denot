@@ -7,6 +7,7 @@ import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Data.IntMap as M
+import qualified Data.Map.Strict as Env
 import Data.Maybe (fromMaybe)
 import SchemeParser
 import SchemeTypes
@@ -102,12 +103,12 @@ evalcM = mapM_ evalM
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
-envLookup ρ i = fromMaybe 0 (lookup i ρ)
+envLookup ρ i = fromMaybe 0 (Env.lookup i ρ)
 
 -- |Extend an environment with a list of identifiers and their store
 -- locations.
 extends :: U -> [Ide] -> [L] -> U
-extends ρ is αs = zip is αs <> ρ
+extends ρ is αs = Env.fromList (zip is αs) <> ρ
 
 -- |Send a value to the current continuation.
 sendM :: E -> Scheme [E]
@@ -541,7 +542,7 @@ evalStd prog = runSchemeWith stdEnv stdStore (evalM prog)
 
 -- |The standard environment
 stdEnv :: U
-stdEnv = zip stdEnvNames [1 ..]
+stdEnv = Env.fromList (zip stdEnvNames [1 ..])
 
 exprDefinedOps :: [(String, [E] -> Scheme [E])]
 exprDefinedOps = [("recursive", recursive)]
