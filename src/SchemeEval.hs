@@ -12,9 +12,9 @@ import SchemeParser
 import SchemeTypes
 
 runSchemeWith :: U -> S -> Scheme [E] -> A
-runSchemeWith u s f =
+runSchemeWith ρ σ ϕ =
   fromMaybe (error "Scheme computation failed") $
-    runContT (runStateT (runReaderT (unScheme f) u) s) pure
+    runContT (runStateT (runReaderT (unScheme ϕ) ρ) σ) pure
 
 runScheme :: Scheme [E] -> A
 runScheme = runSchemeWith stdEnv stdStore
@@ -31,36 +31,36 @@ eval = evalM
 evalM :: Expr -> Scheme [E]
 evalM (Const a) = sendM (Ek a)
 evalM (Id i) = do
-  p <- ask
-  r <- holdM (envLookup p i)
-  case r of
+  ρ <- ask
+  ε <- holdM (envLookup ρ i)
+  case ε of
     Em Undefined -> wrongM ("Undefined variable: " <> i)
-    e -> sendM e
-evalM (App e0 es) = do
-  vals <- unpermute <$> evalsM (permute (e0 : es))
-  case vals of
-    (f:args) -> applicateM f args
+    ε' -> sendM ε'
+evalM (App e0 εs) = do
+  εs' <- unpermute <$> evalsM (permute (e0 : εs))
+  case εs' of
+    (ϕ:args) -> applicateM ϕ args
     [] -> wrongM "application with no operator"
-evalM (If e0 e1 e2) = do
-  e <- singleM =<< evalM e0
-  if truish e
-    then evalM e1
-    else evalM e2
-evalM (IfPartial e0 e1) = do
-  e <- singleM =<< evalM e0
-  if truish e
-    then evalM e1
+evalM (If ε0 ε1 ε2) = do
+  ε <- singleM =<< evalM ε0
+  if truish ε
+    then evalM ε1
+    else evalM ε2
+evalM (IfPartial ε0 ε1) = do
+  ε <- singleM =<< evalM ε0
+  if truish ε
+    then evalM ε1
     else sendM (Em Unspecified)
 evalM (Lambda is gs e0) = do
-  p <- ask
-  l <- alloc (Em Unspecified)
-  sendM (Ef (l, f p))
+  ρ <- ask
+  α <- alloc (Em Unspecified)
+  sendM (Ef (α, ϕ ρ))
   where
-    f p es =
-      if length es == length is
+    ϕ ρ εs =
+      if length εs == length is
         then do
-          as <- tievalsM es
-          local (const (extends p is as)) (evalcM gs >> evalM e0)
+          αs <- tievalsM εs
+          local (const (extends ρ is αs)) (evalcM gs >> evalM e0)
         else
           wrongM
             ( "wrong number of arguments, expected "
@@ -68,28 +68,28 @@ evalM (Lambda is gs e0) = do
                 <> ", namely "
                 <> show is
                 <> " but got "
-                <> show (length es)
+                <> show (length εs)
                 <> " instead"
             )
 evalM (LambdaV is i gs e0) = do
-  p <- ask
-  l <- alloc (Em Unspecified)
-  sendM (Ef (l, f p))
+  ρ <- ask
+  α <- alloc (Em Unspecified)
+  sendM (Ef (α, ϕ ρ))
   where
-    f p es =
-      if length es >= length is
+    ϕ ρ εs =
+      if length εs >= length is
         then do
-          rest <- makeList (dropfirst es (length is))
-          as <- tievalsM (takefirst es (length is) <> [rest])
-          local (const (extends p (is <> [i]) as)) (evalcM gs >> evalM e0)
+          rest <- makeList (dropfirst εs (length is))
+          αs <- tievalsM (takefirst εs (length is) <> [rest])
+          local (const (extends ρ (is <> [i]) αs)) (evalcM gs >> evalM e0)
         else
           wrongM
             ("too few arguments, expected at least " <> show (length is) <> ", namely " <> show is)
 evalM (LambdaVV i gs e0) = evalM (LambdaV [] i gs e0)
 evalM (Set i e) = do
-  v <- singleM =<< evalM e
-  p <- ask
-  assignM (envLookup p i) v
+  ε <- singleM =<< evalM e
+  ρ <- ask
+  assignM (envLookup ρ i) ε
   sendM (Em Unspecified)
 
 -- |Evaluate a list of expressions, collecting one value from each.
@@ -102,16 +102,16 @@ evalcM = mapM_ evalM
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
-envLookup u i = fromMaybe 0 (lookup i u)
+envLookup ρ i = fromMaybe 0 (lookup i ρ)
 
 -- |Extend an environment with a list of identifiers and their store
 -- locations.
 extends :: U -> [Ide] -> [L] -> U
-extends p is as = zip is as <> p
+extends ρ is αs = zip is αs <> ρ
 
 -- |Send a value to the current continuation.
 sendM :: E -> Scheme [E]
-sendM e = pure [e]
+sendM ε = pure [ε]
 
 -- |Raise an error.
 wrongM :: String -> Scheme a
@@ -119,24 +119,24 @@ wrongM = error
 
 -- |Given a location, look it up in the store.
 holdM :: L -> Scheme E
-holdM a = do
-  (_, m) <- get
-  pure (fst (m M.! a))
+holdM α = do
+  (_, σ) <- get
+  pure (fst (σ M.! α))
 
 singleM :: [E] -> Scheme E
-singleM es =
-  if length es == 1
-    then pure (singleValue es)
-    else wrongM ("wrong number of return values, expected 1 but got " <> show (length es))
+singleM εs =
+  if length εs == 1
+    then pure (singleValue εs)
+    else wrongM ("wrong number of return values, expected 1 but got " <> show (length εs))
 
 singleValue :: [E] -> E
-singleValue es =
-  if length es == 1
+singleValue εs =
+  if length εs == 1
     then
-      case es of
-        e:_ -> e
+      case εs of
+        ε:_ -> ε
         [] -> error "singleValue: empty value list"
-    else error ("wrong number of return values, expected 1 but got " <> show (length es))
+    else error ("wrong number of return values, expected 1 but got " <> show (length εs))
 
 -- |Given the store, return the next free cell.
 new :: S -> L
@@ -151,17 +151,17 @@ emptyStore :: S
 emptyStore = (0, mempty)
 
 update :: L -> E -> S -> S
-update a e (c, s) = (max a c, M.insert a (e, True) s)
+update α ε (c, σ) = (max α c, M.insert α (ε, True) σ)
 
 alloc :: E -> Scheme L
-alloc e = do
-  s <- get
-  let a = new s
-  put (update a e s)
-  pure a
+alloc ε = do
+  σ <- get
+  let α = new σ
+  put (update α ε σ)
+  pure α
 
 assignM :: L -> E -> Scheme ()
-assignM a e = modify (update a e)
+assignM α ε = modify (update α ε)
 
 truish :: E -> T
 truish (Ek (Boolean False)) = False
@@ -180,27 +180,27 @@ unpermute = id
 
 -- |Apply a Scheme procedure to a list of operands.
 applicateM :: E -> [E] -> Scheme [E]
-applicateM (Ef (_, f)) es = f es
-applicateM x _ = wrongM ("failed to apply " <> show x <> ", expected a procedure")
+applicateM (Ef (_, ϕ)) εs = ϕ εs
+applicateM χ _ = wrongM ("failed to apply " <> show χ <> ", expected a procedure")
 
 -- |Lift a Haskell function that takes one argument into a Scheme
 -- procedure.
 oneargM :: (E -> Scheme [E]) -> [E] -> Scheme [E]
-oneargM f [e] = f e
-oneargM _ es = wrongM ("wrong number of arguments, expected 1 but got " <> show (length es))
+oneargM ϕ [ε] = ϕ ε
+oneargM _ εs = wrongM ("wrong number of arguments, expected 1 but got " <> show (length εs))
 
 -- |Lift a Haskell function that takes two arguments into a Scheme
 -- procedure.
 twoargM :: (E -> E -> Scheme [E]) -> [E] -> Scheme [E]
-twoargM f [e1, e2] = f e1 e2
-twoargM _ es =
-  wrongM ("wrong number of arguments, expected 2 but got " <> show (length es) <> ": " <> show es)
+twoargM ϕ [ε1, ε2] = ϕ ε1 ε2
+twoargM _ εs =
+  wrongM ("wrong number of arguments, expected 2 but got " <> show (length εs) <> ": " <> show εs)
 
 makePair :: E -> E -> Scheme E
-makePair e1 e2 = do
-  a <- alloc e1
-  b <- alloc e2
-  pure (Ep (a, b, True))
+makePair ε1 ε2 = do
+  α <- alloc ε1
+  β <- alloc ε2
+  pure (Ep (α, β, True))
 
 -- |Scheme @list@.
 list :: [E] -> Scheme [E]
@@ -208,13 +208,13 @@ list = fmap pure . makeList
 
 makeList :: [E] -> Scheme E
 makeList [] = pure (Ek Nil)
-makeList (e:es) = do
-  rest <- makeList es
-  makePair e rest
+makeList (ε:εs) = do
+  rest <- makeList εs
+  makePair ε rest
 
 -- |Scheme @cons@.
 cons :: [E] -> Scheme [E]
-cons = twoargM (\e1 e2 -> sendM =<< makePair e1 e2)
+cons = twoargM (\ε1 ε2 -> sendM =<< makePair ε1 ε2)
 
 factorial :: [E] -> Scheme [E]
 factorial =
@@ -222,33 +222,33 @@ factorial =
     ( \case
         Ek (Number 0) -> sendM (Ek (Number 1))
         m@(Ek (Number n)) -> do
-          e <- singleM =<< factorial [Ek (Number (n - 1))]
-          mult [e, m]
-        x -> wrongM ("non-numeric argument to factorial" <> show x)
+          ε <- singleM =<< factorial [Ek (Number (n - 1))]
+          mult [ε, m]
+        χ -> wrongM ("non-numeric argument to factorial" <> show χ)
     )
 
 makeNumBinop :: String -> (Integer -> E) -> (Integer -> Integer -> Integer) -> [E] -> Scheme [E]
 makeNumBinop name constructor op =
   twoargM
-    ( \e1 e2 ->
-        case e1 of
+    ( \ε1 ε2 ->
+        case ε1 of
           Ek (Number r1) ->
-            case e2 of
+            case ε2 of
               Ek (Number r2) -> sendM (constructor (op r1 r2))
-              x -> wrongM ("non-numeric argument to " <> name <> ", got " <> show x <> " instead")
-          x -> wrongM ("non-numeric argument to " <> name <> ", got " <> show x <> " instead")
+              χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+          χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
     )
 
 makeNumPredicate :: String -> (Integer -> Integer -> Bool) -> [E] -> Scheme [E]
 makeNumPredicate name op =
   twoargM
-    ( \e1 e2 ->
-        case e1 of
+    ( \ε1 ε2 ->
+        case ε1 of
           Ek (Number r1) ->
-            case e2 of
+            case ε2 of
               Ek (Number r2) -> retbool (op r1 r2)
-              x -> wrongM ("non-numeric argument to " <> name <> ", got " <> show x <> " instead")
-          x -> wrongM ("non-numeric argument to " <> name <> ", got " <> show x <> " instead")
+              χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
+          χ -> wrongM ("non-numeric argument to " <> name <> ", got " <> show χ <> " instead")
     )
 
 -- |Scheme @+@
@@ -298,8 +298,8 @@ car = oneargM (sendM <=< carValue)
 carValue :: E -> Scheme E
 carValue =
   \case
-    Ep (a, _, _) -> holdM a
-    x -> wrongM ("non-pair argument to car: " <> show x)
+    Ep (α, _, _) -> holdM α
+    χ -> wrongM ("non-pair argument to car: " <> show χ)
 
 -- |Scheme @cdr@
 cdr :: [E] -> Scheme [E]
@@ -308,42 +308,42 @@ cdr = oneargM (sendM <=< cdrValue)
 cdrValue :: E -> Scheme E
 cdrValue =
   \case
-    Ep (_, a, _) -> holdM a
-    x -> wrongM ("non-pair argument to cdr: " <> show x)
+    Ep (_, α, _) -> holdM α
+    χ -> wrongM ("non-pair argument to cdr: " <> show χ)
 
 -- |Scheme @set-car!@
 setcar :: [E] -> Scheme [E]
 setcar =
   twoargM
-    ( \e1 e2 ->
-        case e1 of
-          Ep (a, _, True) -> assignM a e2 >> sendM (Em Unspecified)
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ep (α, _, True) -> assignM α ε2 >> sendM (Em Unspecified)
           Ep _ -> wrongM "immutable argument to set-car!"
-          x -> wrongM ("non-pair argument to set-cdr!: " <> show x)
+          χ -> wrongM ("non-pair argument to set-cdr!: " <> show χ)
     )
 
 -- |Scheme @set-cdr!@
 setcdr :: [E] -> Scheme [E]
 setcdr =
   twoargM
-    ( \e1 e2 ->
-        case e1 of
-          Ep (_, a, True) -> assignM a e2 >> sendM (Em Unspecified)
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ep (_, α, True) -> assignM α ε2 >> sendM (Em Unspecified)
           Ep _ -> wrongM "immutable argument to set-cdr!"
-          x -> wrongM ("non-pair argument to set-cdr! got " <> show x)
+          χ -> wrongM ("non-pair argument to set-cdr! got " <> show χ)
     )
 
 -- |Scheme @eqv?@
 eqv :: [E] -> Scheme [E]
 eqv =
   twoargM
-    ( \e1 e2 ->
-        case (e1, e2) of
-          (Ek a, Ek b) -> retbool (a == b)
-          (Em a, Em b) -> retbool (a == b)
-          (Ev a, Ev b) -> retbool (a == b)
-          (Ep (a, x, _), Ep (b, y, _)) -> retbool (a == b && x == y)
-          (Ef (a, _), Ef (b, _)) -> retbool (a == b)
+    ( \ε1 ε2 ->
+        case (ε1, ε2) of
+          (Ek α, Ek β) -> retbool (α == β)
+          (Em α, Em β) -> retbool (α == β)
+          (Ev α, Ev β) -> retbool (α == β)
+          (Ep (α, x, _), Ep (β, y, _)) -> retbool (α == β && x == y)
+          (Ef (α, _), Ef (β, _)) -> retbool (α == β)
           _ -> retbool False
     )
 
@@ -408,7 +408,7 @@ symbolToString =
   oneargM
     ( \case
         Ek (Symbol q) -> sendM (Ek (String q))
-        v -> wrongM ("non-symbol argument to symbol->string: " <> show v)
+        χ -> wrongM ("non-symbol argument to symbol->string: " <> show χ)
     )
 
 -- |Scheme @string->symbol@
@@ -417,19 +417,19 @@ stringToSymbol =
   oneargM
     ( \case
         Ek (String q) -> sendM (Ek (Symbol q))
-        v -> wrongM ("non-string argument to string->symbol: " <> show v)
+        χ -> wrongM ("non-string argument to string->symbol: " <> show χ)
     )
 
 -- |Scheme @string-append@
 stringAppend :: [E] -> Scheme [E]
 stringAppend =
   twoargM
-    ( \e1 e2 ->
-        case (e1, e2) of
+    ( \ε1 ε2 ->
+        case (ε1, ε2) of
           (Ek (String p), Ek (String q)) -> sendM (Ek (String (p <> q)))
-          (x, Ek (String _)) -> wrongM ("non-string argument to string-append: " <> show x)
-          (Ek (String _), x) -> wrongM ("non-string argument to string-append: " <> show x)
-          (x, x') -> wrongM ("non-string arguments to string-append: " <> show x <> " " <> show x')
+          (χ, Ek (String _)) -> wrongM ("non-string argument to string-append: " <> show χ)
+          (Ek (String _), χ) -> wrongM ("non-string argument to string-append: " <> show χ)
+          (χ, χ') -> wrongM ("non-string arguments to string-append: " <> show χ <> " " <> show χ')
     )
 
 -- |Scheme @number->string@
@@ -438,7 +438,7 @@ numberToString =
   oneargM
     ( \case
         Ek (Number n) -> sendM (Ek (String (show n)))
-        x -> wrongM ("non-numeric argument to number->string: " <> show x)
+        χ -> wrongM ("non-numeric argument to number->string: " <> show χ)
     )
 
 liftExpr :: Expr -> [E] -> Scheme [E]
@@ -489,21 +489,21 @@ recursive =
 apply :: [E] -> Scheme [E]
 apply =
   twoargM
-    ( \e1 e2 ->
-        case e1 of
-          Ef _ -> valueslistM e2 >>= applicateM e1
-          x -> wrongM ("bad procedure argument to apply: " <> show x)
+    ( \ε1 ε2 ->
+        case ε1 of
+          Ef _ -> valueslistM ε2 >>= applicateM ε1
+          χ -> wrongM ("bad procedure argument to apply: " <> show χ)
     )
 
 valueslistM :: E -> Scheme [E]
 valueslistM =
   \case
-    e@(Ep _) -> do
-      x <- carValue e
-      xs <- cdrValue e >>= valueslistM
-      pure (x : xs)
+    ε@(Ep _) -> do
+      ε' <- carValue ε
+      εs <- cdrValue ε >>= valueslistM
+      pure (ε' : εs)
     Ek Nil -> pure []
-    x -> wrongM ("non-list argument to values-list:" <> show x)
+    χ -> wrongM ("non-list argument to values-list:" <> show χ)
 
 tievalsM :: [E] -> Scheme [L]
 tievalsM = mapM alloc
@@ -512,13 +512,13 @@ tievalsM = mapM alloc
 callcc :: [E] -> Scheme [E]
 callcc =
   oneargM
-    ( \e ->
-        case e of
+    ( \ε ->
+        case ε of
           Ef _ ->
-            callCC $ \k -> do
-              l <- alloc (Em Unspecified)
-              applicateM e [Ef (l, k)]
-          _ -> wrongM ("bad procedure argument to call/cc: " <> show e)
+            callCC $ \κ -> do
+              α <- alloc (Em Unspecified)
+              applicateM ε [Ef (α, κ)]
+          _ -> wrongM ("bad procedure argument to call/cc: " <> show ε)
     )
 
 -- |Scheme @values@
@@ -527,13 +527,13 @@ values = pure
 
 -- |Scheme @call-with-values@
 cwv :: [E] -> Scheme [E]
-cwv = twoargM (\e1 e2 -> applicateM e1 [] >>= applicateM e2)
+cwv = twoargM (\ε1 ε2 -> applicateM ε1 [] >>= applicateM ε2)
 
 dropfirst :: [E] -> Int -> [E]
-dropfirst es v = drop v es
+dropfirst εs v = drop v εs
 
 takefirst :: [E] -> Int -> [E]
-takefirst es v = take v es
+takefirst εs v = take v εs
 
 -- |Evaluate an expression with the standard environment and store.
 evalStd :: Expr -> A
