@@ -11,24 +11,24 @@ import Data.Maybe (fromMaybe)
 import SchemeParser
 import SchemeTypes
 
-runSchemeWith :: U -> S -> Scheme' [E] -> A
+runSchemeWith :: U -> S -> Scheme [E] -> A
 runSchemeWith u s f =
   fromMaybe (error "Scheme computation failed") $
     runContT (runStateT (runReaderT (unScheme f) u) s) pure
 
-runScheme :: Scheme' [E] -> A
+runScheme :: Scheme [E] -> A
 runScheme = runSchemeWith stdEnv stdStore
 
-sputChar :: MonadIO m => Char -> Scheme m u r s ()
+sputChar :: MonadIO m => Char -> SchemeT m u r s ()
 sputChar = liftIO . putChar
 
-sputStrLn :: MonadIO m => String -> Scheme m u r s ()
+sputStrLn :: MonadIO m => String -> SchemeT m u r s ()
 sputStrLn = liftIO . putStrLn
 
-eval :: Expr -> Scheme' [E]
+eval :: Expr -> Scheme [E]
 eval = evalM
 
-evalM :: Expr -> Scheme' [E]
+evalM :: Expr -> Scheme [E]
 evalM (Const a) = sendM (Ek a)
 evalM (Id i) = do
   p <- ask
@@ -93,11 +93,11 @@ evalM (Set i e) = do
   sendM (Em Unspecified)
 
 -- |Evaluate a list of expressions, collecting one value from each.
-evalsM :: [Expr] -> Scheme' [E]
+evalsM :: [Expr] -> Scheme [E]
 evalsM = mapM (singleM <=< evalM)
 
 -- |Evaluate a list of commands, discarding each command's values.
-evalcM :: [Expr] -> Scheme' ()
+evalcM :: [Expr] -> Scheme ()
 evalcM = mapM_ evalM
 
 -- |Look up an identifier in the environment.
@@ -110,20 +110,20 @@ extends :: U -> [Ide] -> [L] -> U
 extends p is as = zip is as <> p
 
 -- |Send a value to the current continuation.
-sendM :: E -> Scheme' [E]
+sendM :: E -> Scheme [E]
 sendM e = pure [e]
 
 -- |Raise an error.
-wrongM :: String -> Scheme' a
+wrongM :: String -> Scheme a
 wrongM = error
 
 -- |Given a location, look it up in the store.
-holdM :: L -> Scheme' E
+holdM :: L -> Scheme E
 holdM a = do
   (_, m) <- get
   pure (fst (m M.! a))
 
-singleM :: [E] -> Scheme' E
+singleM :: [E] -> Scheme E
 singleM es =
   if length es == 1
     then pure (singleValue es)
@@ -153,14 +153,14 @@ emptyStore = (0, mempty)
 update :: L -> E -> S -> S
 update a e (c, s) = (max a c, M.insert a (e, True) s)
 
-alloc :: E -> Scheme' L
+alloc :: E -> Scheme L
 alloc e = do
   s <- get
   let a = new s
   put (update a e s)
   pure a
 
-assignM :: L -> E -> Scheme' ()
+assignM :: L -> E -> Scheme ()
 assignM a e = modify (update a e)
 
 truish :: E -> T
@@ -179,44 +179,44 @@ unpermute :: [E] -> [E]
 unpermute = id
 
 -- |Apply a Scheme procedure to a list of operands.
-applicateM :: E -> [E] -> Scheme' [E]
+applicateM :: E -> [E] -> Scheme [E]
 applicateM (Ef (_, f)) es = f es
 applicateM x _ = wrongM ("failed to apply " <> show x <> ", expected a procedure")
 
 -- |Lift a Haskell function that takes one argument into a Scheme
 -- procedure.
-oneargM :: (E -> Scheme' [E]) -> [E] -> Scheme' [E]
+oneargM :: (E -> Scheme [E]) -> [E] -> Scheme [E]
 oneargM f [e] = f e
 oneargM _ es = wrongM ("wrong number of arguments, expected 1 but got " <> show (length es))
 
 -- |Lift a Haskell function that takes two arguments into a Scheme
 -- procedure.
-twoargM :: (E -> E -> Scheme' [E]) -> [E] -> Scheme' [E]
+twoargM :: (E -> E -> Scheme [E]) -> [E] -> Scheme [E]
 twoargM f [e1, e2] = f e1 e2
 twoargM _ es =
   wrongM ("wrong number of arguments, expected 2 but got " <> show (length es) <> ": " <> show es)
 
-makePair :: E -> E -> Scheme' E
+makePair :: E -> E -> Scheme E
 makePair e1 e2 = do
   a <- alloc e1
   b <- alloc e2
   pure (Ep (a, b, True))
 
 -- |Scheme @list@.
-list :: [E] -> Scheme' [E]
+list :: [E] -> Scheme [E]
 list = fmap pure . makeList
 
-makeList :: [E] -> Scheme' E
+makeList :: [E] -> Scheme E
 makeList [] = pure (Ek Nil)
 makeList (e:es) = do
   rest <- makeList es
   makePair e rest
 
 -- |Scheme @cons@.
-cons :: [E] -> Scheme' [E]
+cons :: [E] -> Scheme [E]
 cons = twoargM (\e1 e2 -> sendM =<< makePair e1 e2)
 
-factorial :: [E] -> Scheme' [E]
+factorial :: [E] -> Scheme [E]
 factorial =
   oneargM
     ( \case
@@ -227,7 +227,7 @@ factorial =
         x -> wrongM ("non-numeric argument to factorial" <> show x)
     )
 
-makeNumBinop :: String -> (Integer -> E) -> (Integer -> Integer -> Integer) -> [E] -> Scheme' [E]
+makeNumBinop :: String -> (Integer -> E) -> (Integer -> Integer -> Integer) -> [E] -> Scheme [E]
 makeNumBinop name constructor op =
   twoargM
     ( \e1 e2 ->
@@ -239,7 +239,7 @@ makeNumBinop name constructor op =
           x -> wrongM ("non-numeric argument to " <> name <> ", got " <> show x <> " instead")
     )
 
-makeNumPredicate :: String -> (Integer -> Integer -> Bool) -> [E] -> Scheme' [E]
+makeNumPredicate :: String -> (Integer -> Integer -> Bool) -> [E] -> Scheme [E]
 makeNumPredicate name op =
   twoargM
     ( \e1 e2 ->
@@ -252,67 +252,67 @@ makeNumPredicate name op =
     )
 
 -- |Scheme @+@
-add :: [E] -> Scheme' [E]
+add :: [E] -> Scheme [E]
 add = makeNumBinop "+" (Ek . Number) (+)
 
 -- |Scheme @<@
-less :: [E] -> Scheme' [E]
+less :: [E] -> Scheme [E]
 less = makeNumPredicate "<" (<)
 
 -- |Scheme @>@
-more :: [E] -> Scheme' [E]
+more :: [E] -> Scheme [E]
 more = makeNumPredicate ">" (>)
 
 -- |Scheme @=@
-eqli :: [E] -> Scheme' [E]
+eqli :: [E] -> Scheme [E]
 eqli = makeNumPredicate "=" (==)
 
 -- |Scheme @>=@
-eqlig :: [E] -> Scheme' [E]
+eqlig :: [E] -> Scheme [E]
 eqlig = makeNumPredicate ">=" (>=)
 
 -- |Scheme @<=@
-eqlilt :: [E] -> Scheme' [E]
+eqlilt :: [E] -> Scheme [E]
 eqlilt = makeNumPredicate "<=" (<=)
 
 -- |Scheme @*@
-mult :: [E] -> Scheme' [E]
+mult :: [E] -> Scheme [E]
 mult = makeNumBinop "*" (Ek . Number) (*)
 
 -- |Scheme @-@
-sub :: [E] -> Scheme' [E]
+sub :: [E] -> Scheme [E]
 sub = makeNumBinop "-" (Ek . Number) (-)
 
 -- |Scheme @modulo@
-smod :: [E] -> Scheme' [E]
+smod :: [E] -> Scheme [E]
 smod = makeNumBinop "modulo" (Ek . Number) mod
 
 -- |Scheme @div@
-sdiv :: [E] -> Scheme' [E]
+sdiv :: [E] -> Scheme [E]
 sdiv = makeNumBinop "div" (Ek . Number) div
 
 -- |Scheme @car@
-car :: [E] -> Scheme' [E]
+car :: [E] -> Scheme [E]
 car = oneargM (sendM <=< carValue)
 
-carValue :: E -> Scheme' E
+carValue :: E -> Scheme E
 carValue =
   \case
     Ep (a, _, _) -> holdM a
     x -> wrongM ("non-pair argument to car: " <> show x)
 
 -- |Scheme @cdr@
-cdr :: [E] -> Scheme' [E]
+cdr :: [E] -> Scheme [E]
 cdr = oneargM (sendM <=< cdrValue)
 
-cdrValue :: E -> Scheme' E
+cdrValue :: E -> Scheme E
 cdrValue =
   \case
     Ep (_, a, _) -> holdM a
     x -> wrongM ("non-pair argument to cdr: " <> show x)
 
 -- |Scheme @set-car!@
-setcar :: [E] -> Scheme' [E]
+setcar :: [E] -> Scheme [E]
 setcar =
   twoargM
     ( \e1 e2 ->
@@ -323,7 +323,7 @@ setcar =
     )
 
 -- |Scheme @set-cdr!@
-setcdr :: [E] -> Scheme' [E]
+setcdr :: [E] -> Scheme [E]
 setcdr =
   twoargM
     ( \e1 e2 ->
@@ -334,7 +334,7 @@ setcdr =
     )
 
 -- |Scheme @eqv?@
-eqv :: [E] -> Scheme' [E]
+eqv :: [E] -> Scheme [E]
 eqv =
   twoargM
     ( \e1 e2 ->
@@ -347,63 +347,63 @@ eqv =
           _ -> retbool False
     )
 
-retbool :: Bool -> Scheme' [E]
+retbool :: Bool -> Scheme [E]
 retbool = sendM . Ek . Boolean
 
-predLift :: (E -> Bool) -> [E] -> Scheme' [E]
+predLift :: (E -> Bool) -> [E] -> Scheme [E]
 predLift p = oneargM (retbool . p)
 
 -- |Scheme @number?@
-numberp :: [E] -> Scheme' [E]
+numberp :: [E] -> Scheme [E]
 numberp = predLift p
   where
     p (Ek (Number _)) = True
     p _ = False
 
 -- |Scheme @boolean?@
-booleanp :: [E] -> Scheme' [E]
+booleanp :: [E] -> Scheme [E]
 booleanp = predLift p
   where
     p (Ek (Boolean _)) = True
     p _ = False
 
 -- |Scheme @symbol?@
-symbolp :: [E] -> Scheme' [E]
+symbolp :: [E] -> Scheme [E]
 symbolp = predLift p
   where
     p (Ek (Symbol _)) = True
     p _ = False
 
 -- |Scheme @procedure?@
-procedurep :: [E] -> Scheme' [E]
+procedurep :: [E] -> Scheme [E]
 procedurep = predLift p
   where
     p (Ef _) = True
     p _ = False
 
 -- |Scheme @pair?@
-pairp :: [E] -> Scheme' [E]
+pairp :: [E] -> Scheme [E]
 pairp = predLift p
   where
     p (Ep _) = True
     p _ = False
 
 -- |Scheme @null?@
-nullp :: [E] -> Scheme' [E]
+nullp :: [E] -> Scheme [E]
 nullp = predLift p
   where
     p (Ek Nil) = True
     p _ = False
 
 -- |Scheme @string?@
-stringp :: [E] -> Scheme' [E]
+stringp :: [E] -> Scheme [E]
 stringp = predLift p
   where
     p (Ek (String _)) = True
     p _ = False
 
 -- |Scheme @symbol->string@
-symbolToString :: [E] -> Scheme' [E]
+symbolToString :: [E] -> Scheme [E]
 symbolToString =
   oneargM
     ( \case
@@ -412,7 +412,7 @@ symbolToString =
     )
 
 -- |Scheme @string->symbol@
-stringToSymbol :: [E] -> Scheme' [E]
+stringToSymbol :: [E] -> Scheme [E]
 stringToSymbol =
   oneargM
     ( \case
@@ -421,7 +421,7 @@ stringToSymbol =
     )
 
 -- |Scheme @string-append@
-stringAppend :: [E] -> Scheme' [E]
+stringAppend :: [E] -> Scheme [E]
 stringAppend =
   twoargM
     ( \e1 e2 ->
@@ -433,7 +433,7 @@ stringAppend =
     )
 
 -- |Scheme @number->string@
-numberToString :: [E] -> Scheme' [E]
+numberToString :: [E] -> Scheme [E]
 numberToString =
   oneargM
     ( \case
@@ -441,10 +441,10 @@ numberToString =
         x -> wrongM ("non-numeric argument to number->string: " <> show x)
     )
 
-liftExpr :: Expr -> [E] -> Scheme' [E]
+liftExpr :: Expr -> [E] -> Scheme [E]
 liftExpr = applicateM . singleValue . fst . evalStd
 
-liftString :: String -> [E] -> Scheme' [E]
+liftString :: String -> [E] -> Scheme [E]
 liftString = liftExpr . rparse
 
 -- |Parse and evaluate a string.
@@ -462,7 +462,7 @@ rparse s =
     Left err -> error ("Parse error: " <> show err)
 
 -- |An example of defining a Scheme procedure given an expression.
-recursive :: [E] -> Scheme' [E]
+recursive :: [E] -> Scheme [E]
 recursive =
   liftExpr
     ( Lambda
@@ -486,7 +486,7 @@ recursive =
     )
 
 -- |Scheme @apply@
-apply :: [E] -> Scheme' [E]
+apply :: [E] -> Scheme [E]
 apply =
   twoargM
     ( \e1 e2 ->
@@ -495,7 +495,7 @@ apply =
           x -> wrongM ("bad procedure argument to apply: " <> show x)
     )
 
-valueslistM :: E -> Scheme' [E]
+valueslistM :: E -> Scheme [E]
 valueslistM =
   \case
     e@(Ep _) -> do
@@ -505,11 +505,11 @@ valueslistM =
     Ek Nil -> pure []
     x -> wrongM ("non-list argument to values-list:" <> show x)
 
-tievalsM :: [E] -> Scheme' [L]
+tievalsM :: [E] -> Scheme [L]
 tievalsM = mapM alloc
 
 -- |Scheme @call-with-current-continuation@
-callcc :: [E] -> Scheme' [E]
+callcc :: [E] -> Scheme [E]
 callcc =
   oneargM
     ( \e ->
@@ -522,11 +522,11 @@ callcc =
     )
 
 -- |Scheme @values@
-values :: [E] -> Scheme' [E]
+values :: [E] -> Scheme [E]
 values = pure
 
 -- |Scheme @call-with-values@
-cwv :: [E] -> Scheme' [E]
+cwv :: [E] -> Scheme [E]
 cwv = twoargM (\e1 e2 -> applicateM e1 [] >>= applicateM e2)
 
 dropfirst :: [E] -> Int -> [E]
@@ -543,11 +543,11 @@ evalStd prog = runSchemeWith stdEnv stdStore (evalM prog)
 stdEnv :: U
 stdEnv = zip stdEnvNames [1 ..]
 
-exprDefinedOps :: [(String, [E] -> Scheme' [E])]
+exprDefinedOps :: [(String, [E] -> Scheme [E])]
 exprDefinedOps = [("recursive", recursive)]
 
 -- |The list of built-in operations.
-builtInOps :: [(String, [E] -> Scheme' [E])]
+builtInOps :: [(String, [E] -> Scheme [E])]
 builtInOps =
   [ ("+", add)
   , ("*", mult)
@@ -590,7 +590,7 @@ stdEnvNames :: [String]
 stdEnvNames = map fst builtInOps
 
 -- |The list of standard operations.
-stdOps :: [[E] -> Scheme' [E]]
+stdOps :: [[E] -> Scheme [E]]
 stdOps = map snd builtInOps
 
 -- |The standard prelude.

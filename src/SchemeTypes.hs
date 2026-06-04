@@ -107,7 +107,7 @@ instance Show M where
   show Undefined = "#<undefined>"
 
 -- |Procedures
-type F = (L, [E] -> Scheme' [E])
+type F = (L, [E] -> Scheme [E])
 
 -- |Stores
 type S = (Int, M.IntMap (E,T))
@@ -167,7 +167,7 @@ data Body = Body [Defn] [Com] Expr
 
 type Program = NonEmpty (Either Com Defn)
 
-newtype Scheme m u r s a = Scheme {unScheme :: ReaderT u (StateT s (ContT r m)) a}
+newtype SchemeT m u r s a = SchemeT {unScheme :: ReaderT u (StateT s (ContT r m)) a}
   deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail, MonadIO)
 
-type Scheme' a = Scheme Maybe U A S a
+type Scheme a = SchemeT Maybe U A S a
