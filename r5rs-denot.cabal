@@ -14,7 +14,16 @@ author:              Siraphob (Ben) Phipathananunth
 maintainer:          bensiraphob@gmail.com
 -- copyright:
 -- category:
-extra-source-files:  CHANGELOG.md, README.md
+extra-source-files:
+  CHANGELOG.md
+  README.md
+  test/conformance/README.md
+  test/conformance/upstream/r5rs_pitfall.scm
+  test/conformance/pass/*.scm
+
+data-files:
+  test/conformance/upstream/r5rs_pitfall.scm
+  test/conformance/pass/*.scm
 
 executable r5rs-denot
   ghc-options:         -Wunused-imports -Wincomplete-patterns
@@ -23,4 +32,14 @@ executable r5rs-denot
   -- other-extensions:
   build-depends:       base, parsec, containers
   hs-source-dirs:      src
+  default-language:    Haskell2010
+
+test-suite r5rs-denot-conformance
+  type:                exitcode-stdio-1.0
+  ghc-options:         -Wunused-imports -Wincomplete-patterns
+  main-is:             Conformance.hs
+  other-modules:       SchemeEval, SchemeParser, SchemeTypes, Paths_r5rs_denot
+  autogen-modules:     Paths_r5rs_denot
+  build-depends:       base, parsec, containers
+  hs-source-dirs:      test, src
   default-language:    Haskell2010

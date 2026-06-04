@@ -245,8 +245,10 @@ schemeAnd =
   parens $ do
     reserved "and"
     exprs <- schemeExpr `sepBy` space
-    pure (foldr (\e es -> If e es (Const (Boolean False)))
-                (Const (Boolean True)) exprs)
+    pure $
+      case exprs of
+        [] -> Const (Boolean True)
+        _  -> foldr1 (\e es -> If e es (Const (Boolean False))) exprs
 
 -- Danger!  We're writing unhygienic macros!
 schemeOr = 
