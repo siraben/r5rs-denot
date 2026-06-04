@@ -36,12 +36,15 @@ cases =
   , ("call/cc escape", rparse "(call/cc (lambda (k) (k 42) 0))", ["42"])
   , ("set-car mutation", rparse "(let ((p (cons 1 2))) (set-car! p 9) (car p))", ["9"])
   , ("rest arguments", rparse "((lambda (x . xs) xs) 1 2 3)", ["(2 3)"])
+  , ("display primitive", rparse "(begin (display \"\") 7)", ["7"])
+  , ("write primitive", rparse "(begin (write (string->symbol \"\")) 8)", ["8"])
+  , ("newline primitive", rparse "(begin (newline) 9)", ["9"])
   ]
 
 runCase :: Case -> IO [String]
 runCase (name, expr, expected) = do
-  let (actual, store) = evalStd expr
-      rendered = (`showFull` store) <$> actual
+  (actual, store) <- evalStd expr
+  let rendered = (`showFull` store) <$> actual
   pure
     [ name <> ": expected " <> show expected <> ", got " <> show rendered
     | rendered /= expected

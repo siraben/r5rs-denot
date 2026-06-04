@@ -37,7 +37,7 @@ repl = do
       exp <- getLine
       if exp == ""
         then repl
-        else reportResult $ reval exp
+        else reval exp >>= reportResult
       repl
 
 -- |Read, evaluate and print a file.
@@ -45,7 +45,7 @@ repf :: String -> IO ()
 repf filename = do
   x <- openFile filename ReadMode
   y <- hGetContents x
-  reportResult $ reval y
+  reval y >>= reportResult
 
 -- |Read and print a file.
 rpf :: String -> IO ()

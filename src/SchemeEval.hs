@@ -8,16 +8,14 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Data.IntMap as M
 import qualified Data.Map.Strict as Env
-import Data.Maybe (fromMaybe)
 import SchemeParser
 import SchemeTypes
 
-runSchemeWith :: U -> S -> Scheme [E] -> A
+runSchemeWith :: U -> S -> Scheme [E] -> IO A
 runSchemeWith ρ σ ϕ =
-  fromMaybe (error "Scheme computation failed") $
-    runContT (runStateT (runReaderT (unScheme ϕ) ρ) σ) pure
+  runContT (runStateT (runReaderT (unScheme ϕ) ρ) σ) pure
 
-runScheme :: Scheme [E] -> A
+runScheme :: Scheme [E] -> IO A
 runScheme = runSchemeWith stdEnv stdStore
 
 sputChar :: MonadIO m => Char -> SchemeT m u r s ()
@@ -103,7 +101,7 @@ evalcM = mapM_ evalM
 
 -- |Look up an identifier in the environment.
 envLookup :: U -> Ide -> L
-envLookup ρ i = fromMaybe 0 (Env.lookup i ρ)
+envLookup ρ i = Env.findWithDefault 0 i ρ
 
 -- |Extend an environment with a list of identifiers and their store
 -- locations.
@@ -442,14 +440,41 @@ numberToString =
         χ -> wrongM ("non-numeric argument to number->string: " <> show χ)
     )
 
+-- |Scheme @display@.
+display :: [E] -> Scheme [E]
+display =
+  oneargM $ \ε -> do
+    σ <- get
+    liftIO . putStr $
+      case ε of
+        Ek (String s) -> s
+        Ek (Character c) -> [c]
+        _ -> showFull ε σ
+    sendM (Em Unspecified)
+
+-- |Scheme @write@.
+write :: [E] -> Scheme [E]
+write =
+  oneargM $ \ε -> do
+    σ <- get
+    liftIO (putStr (showFull ε σ))
+    sendM (Em Unspecified)
+
+-- |Scheme @newline@.
+newline :: [E] -> Scheme [E]
+newline [] = liftIO (putChar '\n') >> sendM (Em Unspecified)
+newline εs = wrongM ("wrong number of arguments, expected 0 but got " <> show (length εs))
+
 liftExpr :: Expr -> [E] -> Scheme [E]
-liftExpr = applicateM . singleValue . fst . evalStd
+liftExpr expr args = do
+  (εs, _) <- liftIO (evalStd expr)
+  applicateM (singleValue εs) args
 
 liftString :: String -> [E] -> Scheme [E]
 liftString = liftExpr . rparse
 
 -- |Parse and evaluate a string.
-reval :: String -> A
+reval :: String -> IO A
 reval s =
   case readProg s of
     Right res -> evalStd res
@@ -537,7 +562,7 @@ takefirst :: [E] -> Int -> [E]
 takefirst εs v = take v εs
 
 -- |Evaluate an expression with the standard environment and store.
-evalStd :: Expr -> A
+evalStd :: Expr -> IO A
 evalStd prog = runSchemeWith stdEnv stdStore (evalM prog)
 
 -- |The standard environment
@@ -583,6 +608,9 @@ builtInOps =
   , ("string->symbol", stringToSymbol)
   , ("string-append", stringAppend)
   , ("number->string", numberToString)
+  , ("display", display)
+  , ("write", write)
+  , ("newline", newline)
   ]
     <> exprDefinedOps
 

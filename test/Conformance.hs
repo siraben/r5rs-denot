@@ -32,7 +32,7 @@ runCase :: Case -> IO (Maybe String)
 runCase (Case path expected) = do
   sourcePath <- getDataFileName path
   source <- readFile sourcePath
-  let actual = render (reval source)
+  actual <- render <$> reval source
   pure $
     if actual == expected
       then Nothing

@@ -170,4 +170,4 @@ type Program = NonEmpty (Either Com Defn)
 newtype SchemeT m u r s a = SchemeT {unScheme :: ReaderT u (StateT s (ContT r m)) a}
   deriving (Functor, Applicative, Monad, MonadReader u, MonadState s, MonadCont, MonadFail, MonadIO)
 
-type Scheme a = SchemeT Maybe U A S a
+type Scheme a = SchemeT IO U A S a
